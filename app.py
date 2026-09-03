@@ -55,6 +55,22 @@ RISK_COLORS = {
     "SEVERE": "🔴",
 }
 
+# Canonical pipeline stages, matched by STATE KEY rather than LangGraph node
+# name — this keeps the diagram accurate no matter what the compiled graph's
+# node ids actually are, since (state_key present) is the same signal the
+# rest of this file already trusts (see render_result / DATA_KEYS).
+STAGE_DEFS = [
+    ("planner", "🧠", "Planner", "plan"),
+    ("weather", "🌤️", "Weather", "weather_data"),
+    ("ocean", "🌊", "Ocean", "ocean_data"),
+    ("tide", "🌙", "Tide", "tide_data"),
+    ("cyclone", "🌀", "Cyclone", "cyclone_data"),
+    ("ecosystem", "🐟", "Ecosystem", "ecosystem_data"),
+    ("pfz", "🎣", "PFZ", "pfz_data"),
+    ("synthesis", "🎯", "Synthesis", "recommendation"),
+]
+STAGE_LABELS = {"pending": "Waiting", "active": "Running…", "done": "Done", "skipped": "Not needed"}
+
 SUGGESTED_QUESTIONS = [
     "Where is the nearest Potential Fishing Zone today?",
     "Is it safe to venture into the sea tomorrow morning?",
@@ -151,6 +167,40 @@ st.markdown(
     button[data-baseweb="tab"] { color: #8faac4 !important; }
     button[data-baseweb="tab"][aria-selected="true"] { color: #67e8f9 !important; }
     details { background: rgba(8, 22, 38, 0.65); border: 1px solid rgba(100, 180, 220, 0.12); border-radius: 12px; }
+    .pipe-scroll { overflow-x: auto; padding: 4px 2px 10px 2px; }
+    .pipe-row { display: flex; align-items: center; flex-wrap: nowrap; min-width: min-content; }
+    .pipe-node {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        min-width: 92px; padding: 10px 8px; border-radius: 14px; text-align: center;
+        border: 1.5px solid rgba(120, 190, 230, 0.18);
+        background: rgba(10, 28, 48, 0.55);
+        transition: all 0.35s ease;
+    }
+    .pipe-icon { font-size: 20px; }
+    .pipe-name { font-size: 11.5px; font-weight: 700; margin-top: 4px; color: #dcecff; }
+    .pipe-state { font-size: 10px; margin-top: 2px; letter-spacing: 0.3px; }
+    .pipe-pending { opacity: 0.42; }
+    .pipe-pending .pipe-state { color: #7f97b3; }
+    .pipe-skipped { opacity: 0.30; border-style: dashed; }
+    .pipe-skipped .pipe-state { color: #7f97b3; }
+    .pipe-active {
+        border-color: #00b4d8; opacity: 1;
+        box-shadow: 0 0 0 rgba(0, 180, 216, 0.5);
+        animation: pipe-pulse 1.3s ease-in-out infinite;
+    }
+    .pipe-active .pipe-state { color: #6ee7ff; font-weight: 600; }
+    .pipe-done {
+        border-color: #34d399; opacity: 1;
+        background: rgba(16, 60, 50, 0.55);
+    }
+    .pipe-done .pipe-state { color: #5eead4; font-weight: 600; }
+    .pipe-arrow { flex: 0 0 auto; padding: 0 6px; font-size: 15px; color: rgba(140, 190, 220, 0.30); }
+    .pipe-arrow-done { color: #34d399; }
+    @keyframes pipe-pulse {
+        0%   { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0.45); }
+        70%  { box-shadow: 0 0 0 9px rgba(0, 180, 216, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0); }
+    }
     div[data-testid="stChatMessage"] {
         background: rgba(9, 24, 42, 0.55); border: 1px solid rgba(100, 180, 220, 0.10);
         border-radius: 16px; padding: 6px 4px;
@@ -269,6 +319,71 @@ def extract_map_points(result):
                     except (TypeError, ValueError):
                         continue
     return points
+
+
+def _parse_plan(state):
+    plan = state.get("plan")
+    if isinstance(plan, str):
+        try:
+            plan = json.loads(plan)
+        except Exception:
+            return None
+    return plan if isinstance(plan, dict) else None
+
+
+def compute_stage_status(state):
+    """Derive each pipeline stage's status purely from which keys are
+    present in the (possibly partial) graph state. This is independent of
+    whatever the compiled graph's internal node names are, so it works the
+    same whether we got here via streamed partial updates or a single
+    final invoke()."""
+    plan = _parse_plan(state)
+    plan_done = bool(state.get("plan"))
+    rejected = bool(plan and plan.get("rejected"))
+    required = plan.get("required_agents", []) if plan else []
+
+    status = {"planner": "done" if plan_done else "active"}
+
+    agents_pending = False
+    for sid, _, _, data_key in STAGE_DEFS[1:-1]:
+        if not plan_done:
+            status[sid] = "pending"
+            agents_pending = True
+        elif sid not in required:
+            status[sid] = "skipped"
+        elif state.get(data_key):
+            status[sid] = "done"
+        else:
+            status[sid] = "active"
+            agents_pending = True
+
+    if rejected:
+        status["synthesis"] = "skipped"
+    elif state.get("recommendation"):
+        status["synthesis"] = "done"
+    elif plan_done and not agents_pending:
+        status["synthesis"] = "active"
+    else:
+        status["synthesis"] = "pending"
+
+    return status
+
+
+def render_pipeline_html(stage_status):
+    nodes = []
+    for i, (sid, icon, label, _) in enumerate(STAGE_DEFS):
+        state = stage_status.get(sid, "pending")
+        nodes.append(
+            f'<div class="pipe-node pipe-{state}">'
+            f'<div class="pipe-icon">{icon}</div>'
+            f'<div class="pipe-name">{label}</div>'
+            f'<div class="pipe-state">{STAGE_LABELS[state]}</div>'
+            f'</div>'
+        )
+        if i < len(STAGE_DEFS) - 1:
+            arrow_done = "pipe-arrow-done" if state == "done" else ""
+            nodes.append(f'<div class="pipe-arrow {arrow_done}">➜</div>')
+    return f'<div class="pipe-scroll"><div class="pipe-row">{"".join(nodes)}</div></div>'
 
 
 def render_result(result, latitude, longitude, key_prefix):
@@ -438,6 +553,7 @@ for idx, msg in enumerate(st.session_state.messages):
             st.error("Marine analysis failed.")
             st.exception(msg["error"])
         else:
+            st.markdown(render_pipeline_html(compute_stage_status(msg["result"])), unsafe_allow_html=True)
             render_result(msg["result"], msg["latitude"], msg["longitude"], key_prefix=f"msg{idx}")
 
 # ============================================================
@@ -477,10 +593,17 @@ if prompt:
     with st.chat_message("assistant", avatar="🌊"):
         result = None
         error = None
+        pipeline_slot = st.empty()
+        pipeline_slot.markdown(
+            render_pipeline_html(compute_stage_status(initial_state)), unsafe_allow_html=True
+        )
         with st.status("🤖 Running Marine Intelligence Agents...", expanded=True) as status:
             try:
                 for node_name, state in run_marine_graph(initial_state):
                     result = state
+                    pipeline_slot.markdown(
+                        render_pipeline_html(compute_stage_status(state)), unsafe_allow_html=True
+                    )
                     if node_name:
                         status.write(f"✅ **{node_name.replace('_', ' ').title()}** agent completed")
                 status.update(
