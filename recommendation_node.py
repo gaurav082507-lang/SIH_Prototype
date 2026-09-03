@@ -88,6 +88,10 @@ IMPORTANT RULES:
 - Explain WHY the recommendation was made.
 - Keep the final recommendation understandable.
 - Do not expose internal implementation details.
+- Some agent data below may be abbreviated ("...N more entries
+  omitted for brevity...") to keep this prompt a reasonable size —
+  treat that as "additional similar data points were collected but
+  not shown", not as missing data.
 
 User Question:
 
@@ -139,6 +143,64 @@ SEVERE
 
 
 # ---------------------------------------------------------
+# PROMPT-SIZE COMPACTION
+# ---------------------------------------------------------
+#
+# Specialist agents like weather/ocean/ecosystem return dense
+# per-grid-point x per-hour time series (see
+# final_agent_output_format.md). Dumping that raw into the prompt
+# regularly exceeded Mistral's input size limit and failed with:
+#   {"type": "invalid_request_prompt_too_long", "code": "3059",
+#    "raw_status_code": 400}
+# which was being swallowed by the generic `except Exception` below
+# and reported as a plain "Recommendation generation failed."
+#
+# _compact_for_llm keeps every agent's data but caps how many entries
+# any list contributes, so the prompt stays bounded no matter how
+# much raw data a specialist agent returns. MAX_PROMPT_CHARS is a
+# belt-and-suspenders hard cap in case compaction still isn't enough
+# (e.g. many agents all required at once).
+
+MAX_LIST_LEN = 6
+MAX_COMPACT_DEPTH = 6
+MAX_PROMPT_CHARS = 24000
+
+
+def _compact_for_llm(obj, max_list_len=MAX_LIST_LEN, max_depth=MAX_COMPACT_DEPTH, _depth=0):
+    """Recursively shrink long lists so large per-grid-point/per-hour time
+    series don't blow out the LLM's prompt size limit. Keeps the first
+    (max_list_len - 1) entries of any oversized list and appends a short
+    note describing how many were omitted. Dicts and scalars pass through
+    unchanged (aside from recursing into their contents)."""
+
+    if _depth >= max_depth:
+        return obj
+
+    if isinstance(obj, dict):
+        return {
+            key: _compact_for_llm(value, max_list_len, max_depth, _depth + 1)
+            for key, value in obj.items()
+        }
+
+    if isinstance(obj, list):
+        if len(obj) > max_list_len:
+            kept = obj[: max_list_len - 1]
+            compacted = [
+                _compact_for_llm(item, max_list_len, max_depth, _depth + 1)
+                for item in kept
+            ]
+            omitted = len(obj) - len(kept)
+            compacted.append(f"...{omitted} more entries omitted for brevity...")
+            return compacted
+        return [
+            _compact_for_llm(item, max_list_len, max_depth, _depth + 1)
+            for item in obj
+        ]
+
+    return obj
+
+
+# ---------------------------------------------------------
 # RECOMMENDATION NODE
 # ---------------------------------------------------------
 
@@ -171,15 +233,27 @@ def recommendation_node(state):
     try:
 
         # -------------------------------------------------
-        # Convert to JSON for the LLM
+        # Compact + convert to JSON for the LLM
         # -------------------------------------------------
+        # NOTE: agent_data (the full, uncompacted version) is still
+        # what we return in agent_findings on both success and
+        # failure below, so the UI/caller always sees complete data —
+        # only what we SEND to the model is size-capped.
+
+        agent_data_for_prompt = _compact_for_llm(agent_data)
 
         agent_data_json = json.dumps(
-            agent_data,
+            agent_data_for_prompt,
             ensure_ascii=False,
             indent=2,
             default=str
         )
+
+        if len(agent_data_json) > MAX_PROMPT_CHARS:
+            agent_data_json = (
+                agent_data_json[:MAX_PROMPT_CHARS]
+                + "\n... [truncated: agent data exceeded prompt size limit] ..."
+            )
 
         # -------------------------------------------------
         # Call Mistral
