@@ -27,6 +27,7 @@ class MarineState(TypedDict, total=False):
     cyclone_data: dict
     ecosystem_data: dict
     pfz_data: dict
+    gis_data: dict
 
     # -------------------------
     # Final Recommendation
