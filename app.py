@@ -290,8 +290,13 @@ with st.sidebar:
     )
 
     st.divider()
-    if st.button("🗑️ Clear conversation"):
+    if st.button(
+        "🧹 Clear Chat",
+        disabled=not st.session_state.messages,
+        help="Clear the conversation history and start fresh.",
+    ):
         st.session_state.messages = []
+        st.session_state.pending_question = None
         st.rerun()
 
 # ============================================================
@@ -545,6 +550,14 @@ def run_marine_graph(initial_state):
 # ============================================================
 # CONVERSATION HISTORY
 # ============================================================
+if st.session_state.messages:
+    top_cols = st.columns([6, 1])
+    with top_cols[1]:
+        if st.button("🧹 Clear Chat", key="clear_chat_top", help="Clear the conversation history."):
+            st.session_state.messages = []
+            st.session_state.pending_question = None
+            st.rerun()
+
 for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message("user"):
         st.markdown(msg["question"])
