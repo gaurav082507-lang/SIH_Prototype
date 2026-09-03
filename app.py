@@ -37,7 +37,14 @@ AVAILABLE_AGENTS = [
     ("🌀", "Cyclone", "cyclone"),
     ("🐟", "Ecosystem", "ecosystem"),
     ("🎣", "PFZ", "pfz"),
+    ("🗺️", "GIS", "gis"),
 ]
+
+# GIS runs unconditionally in graph.py (baseline coastal/EEZ/restricted-zone
+# context for every accepted query) rather than being gated on the planner's
+# required_agents like the other six — see the "Active Intelligence Agents"
+# rendering below and compute_stage_status(), which both special-case it.
+ALWAYS_ON_AGENTS = {"gis"}
 
 DATA_KEYS = [
     ("🌤️ Weather", "weather_data"),
@@ -46,6 +53,7 @@ DATA_KEYS = [
     ("🌀 Cyclone", "cyclone_data"),
     ("🐟 Ecosystem", "ecosystem_data"),
     ("🎣 PFZ", "pfz_data"),
+    ("🗺️ GIS", "gis_data"),
 ]
 
 RISK_COLORS = {
@@ -61,6 +69,7 @@ RISK_COLORS = {
 # rest of this file already trusts (see render_result / DATA_KEYS).
 STAGE_DEFS = [
     ("planner", "🧠", "Planner", "plan"),
+    ("gis", "🗺️", "GIS", "gis_data"),
     ("weather", "🌤️", "Weather", "weather_data"),
     ("ocean", "🌊", "Ocean", "ocean_data"),
     ("tide", "🌙", "Tide", "tide_data"),
@@ -351,6 +360,22 @@ def compute_stage_status(state):
 
     agents_pending = False
     for sid, _, _, data_key in STAGE_DEFS[1:-1]:
+        if sid in ALWAYS_ON_AGENTS:
+            # Runs for every ACCEPTED query regardless of required_agents
+            # (see route_after_planner in graph.py) — but a rejected plan
+            # never reaches it either, so it's "skipped" there too.
+            if rejected:
+                status[sid] = "skipped"
+            elif not plan_done:
+                status[sid] = "pending"
+                agents_pending = True
+            elif state.get(data_key):
+                status[sid] = "done"
+            else:
+                status[sid] = "active"
+                agents_pending = True
+            continue
+
         if not plan_done:
             status[sid] = "pending"
             agents_pending = True
@@ -424,10 +449,15 @@ def render_result(result, latitude, longitude, key_prefix):
                     st.metric("Location", f"{latitude:.3f}, {longitude:.3f}")
 
                 st.markdown("### Active Intelligence Agents")
-                cols = st.columns(6)
+                cols = st.columns(len(AVAILABLE_AGENTS))
                 for col, (icon, name, agent_key) in zip(cols, AVAILABLE_AGENTS):
                     with col:
-                        active = agent_key in agents
+                        # GIS always runs alongside whatever the planner
+                        # selected (see ALWAYS_ON_AGENTS / route_after_planner
+                        # in graph.py) — this branch is only reached for an
+                        # accepted plan, so it's safe to show it as ACTIVE
+                        # unconditionally rather than checking required_agents.
+                        active = agent_key in ALWAYS_ON_AGENTS or agent_key in agents
                         status_html = (
                             '<div class="agent-active">● ACTIVE</div>'
                             if active else '<div class="agent-inactive">○ NOT REQUIRED</div>'
