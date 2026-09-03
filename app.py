@@ -809,7 +809,7 @@ if st.button(
                 #
                 # recommendation_node.py's actual output schema is
                 # {summary, risk_level, recommendation, key_findings,
-                #  safety_advice, agent_findings} — this UI previously
+                # safety_advice, agent_findings} — this UI previously
                 # read "overall_status"/"confidence"/"key_factors"/
                 # "recommended_action"/"limitations", none of which the
                 # node ever produces, so most of the result silently
@@ -927,6 +927,7 @@ if st.button(
                     st.markdown(
                         "### 🧭 Safety Advice"
                     )
+
 
                     for advice in safety_advice:
 
