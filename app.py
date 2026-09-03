@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import textwrap
 
 from graph import marine_graph
 
@@ -21,7 +22,7 @@ st.set_page_config(
 # ============================================================
 
 st.markdown(
-    """
+    textwrap.dedent("""
     <style>
 
     /* ======================================================
@@ -439,7 +440,7 @@ st.markdown(
     }
 
     </style>
-    """,
+    """),
     unsafe_allow_html=True
 )
 
@@ -449,7 +450,7 @@ st.markdown(
 # ============================================================
 
 st.markdown(
-    """
+    textwrap.dedent("""
     <div class="hero">
 
         <div class="status-pill">
@@ -466,7 +467,7 @@ st.markdown(
         </div>
 
     </div>
-    """,
+    """),
     unsafe_allow_html=True
 )
 
@@ -511,7 +512,7 @@ with st.sidebar:
     )
 
     st.markdown(
-        """
+        textwrap.dedent("""
         **Available Agents**
 
         🌤️ Weather  
@@ -520,7 +521,7 @@ with st.sidebar:
         🌀 Cyclone  
         🐟 Ecosystem  
         🎣 PFZ  
-        """
+        """)
     )
 
 
@@ -730,7 +731,7 @@ if st.button(
                             if key in agents:
 
                                 st.markdown(
-                                    f"""
+                                    textwrap.dedent(f"""
                                     <div class="agent-card">
 
                                         <div class="agent-icon">
@@ -746,14 +747,14 @@ if st.button(
                                         </div>
 
                                     </div>
-                                    """,
+                                    """),
                                     unsafe_allow_html=True
                                 )
 
                             else:
 
                                 st.markdown(
-                                    f"""
+                                    textwrap.dedent(f"""
                                     <div class="agent-card">
 
                                         <div class="agent-icon">
@@ -769,7 +770,7 @@ if st.button(
                                         </div>
 
                                     </div>
-                                    """,
+                                    """),
                                     unsafe_allow_html=True
                                 )
 
@@ -847,7 +848,7 @@ if st.button(
                 if summary:
 
                     st.markdown(
-                        f"""
+                        textwrap.dedent(f"""
                         <div class="recommendation-card">
 
                             <div class="card-title">
@@ -859,7 +860,7 @@ if st.button(
                             </div>
 
                         </div>
-                        """,
+                        """),
                         unsafe_allow_html=True
                     )
 
@@ -903,11 +904,11 @@ if st.button(
                     for finding in key_findings:
 
                         st.markdown(
-                            f"""
+                            textwrap.dedent(f"""
                             <div class="glass-card">
                                 {finding}
                             </div>
-                            """,
+                            """),
                             unsafe_allow_html=True
                         )
 
@@ -1068,7 +1069,7 @@ if st.button(
 # ============================================================
 
 st.markdown(
-    """
+    textwrap.dedent("""
     <div class="footer">
 
         🌊 ORCA Marine Intelligence Platform
@@ -1076,6 +1077,6 @@ st.markdown(
         Agentic AI • LangGraph • Marine Data Intelligence
 
     </div>
-    """,
+    """),
     unsafe_allow_html=True
 )
