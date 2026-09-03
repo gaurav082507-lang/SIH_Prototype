@@ -9,6 +9,7 @@ from tide_node import tide_node
 from cyclone_node import cyclone_node
 from ecosystem_node import ecosystem_node
 from pfz_node import pfz_node
+from gis_node import gis_node
 from recommendation_node import recommendation_node
 
 
@@ -49,7 +50,20 @@ def route_after_planner(state: MarineState):
     if "pfz" in required_agents:
         routes.append("pfz")
 
-    # If nothing was selected, still generate a response
+    # GIS (coast distance, restricted/protected zones, maritime
+    # boundary, nearest port, EEZ / fishing-zone jurisdiction) is
+    # safety-relevant baseline context for every accepted query —
+    # geofencing near international boundaries or protected areas
+    # matters regardless of what the user actually asked about — so
+    # it always runs alongside whatever specialist agents the planner
+    # selected, rather than being gated on required_agents like the
+    # other six.
+    routes.append("gis")
+
+    # If nothing else was selected, still generate a response
+    # (routes always has at least "gis" at this point, so this is
+    # now a defensive no-op rather than the usual path — kept in
+    # case "gis" is ever removed from the always-on list above).
     if not routes:
         routes.append("recommendation")
 
@@ -75,6 +89,7 @@ builder.add_node("tide", tide_node)
 builder.add_node("cyclone", cyclone_node)
 builder.add_node("ecosystem", ecosystem_node)
 builder.add_node("pfz", pfz_node)
+builder.add_node("gis", gis_node)
 
 builder.add_node("recommendation", recommendation_node)
 
@@ -100,6 +115,7 @@ builder.add_conditional_edges(
         "cyclone": "cyclone",
         "ecosystem": "ecosystem",
         "pfz": "pfz",
+        "gis": "gis",
         "recommendation": "recommendation",
     }
 )
@@ -115,6 +131,7 @@ builder.add_edge("tide", "recommendation")
 builder.add_edge("cyclone", "recommendation")
 builder.add_edge("ecosystem", "recommendation")
 builder.add_edge("pfz", "recommendation")
+builder.add_edge("gis", "recommendation")
 
 
 # ---------------------------------------------------------
