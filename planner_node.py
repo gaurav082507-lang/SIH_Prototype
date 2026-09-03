@@ -50,6 +50,7 @@ ALLOWED_AGENTS = {
     "cyclone",
     "ecosystem",
     "pfz",
+    "gis",
 }
 
 PLANNER_PROMPT = ChatPromptTemplate.from_template(
@@ -65,6 +66,8 @@ agents are required to answer it, using ONLY these agent names:
 - cyclone   : cyclones, tropical storms, storm warnings
 - ecosystem : marine ecosystem, biodiversity, marine species
 - pfz       : potential fishing zones / where to fish
+- gis       : distance to coast, water depth, restricted/protected zones,
+              maritime/EEZ boundary, nearest port (geofencing context)
 
 Rules:
 - Include every agent whose data is actually needed to answer the question.
@@ -72,6 +75,9 @@ Rules:
   "weather", "ocean" and "tide".
 - If the question is about general safety at sea, include "weather",
   "ocean" and "tide".
+- "gis" always runs automatically for every accepted request regardless
+  of what you choose here, so you do not need to include it — but it is
+  harmless if you do.
 - Never leave required_agents empty unless the request has nothing to
   do with marine conditions at all.
 - Do not invent data yourself — you are only selecting which agents run.
