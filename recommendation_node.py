@@ -76,6 +76,12 @@ Available specialist agents:
    - recommended fishing zones
    - fishing-zone suitability
 
+7. GIS (coastal/marine geospatial context)
+   - distance to coast, water depth
+   - restricted zones and marine protected areas (geofencing)
+   - maritime/EEZ boundary and jurisdiction
+   - nearest port
+
 
 IMPORTANT RULES:
 
@@ -128,7 +134,8 @@ Return ONLY valid JSON in this format:
         "tide": null,
         "cyclone": null,
         "ecosystem": null,
-        "pfz": null
+        "pfz": null,
+        "gis": null
     }}
 }}
 
@@ -228,6 +235,7 @@ def recommendation_node(state):
         "cyclone": state.get("cyclone_data"),
         "ecosystem": state.get("ecosystem_data"),
         "pfz": state.get("pfz_data"),
+        "gis": state.get("gis_data"),
     }
 
     try:
