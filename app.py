@@ -460,6 +460,16 @@ def render_result(result, latitude, longitude, key_prefix):
                 f"{RISK_COLORS.get(str(risk_level).upper(), '⚪')} {risk_level}"
             )
 
+            tech_error = recommendation.get("error")
+            if tech_error:
+                st.error(
+                    "⚠️ The recommendation agent hit an error and fell back to a "
+                    "generic response — the summary/recommendation below are NOT a "
+                    "real assessment."
+                )
+                with st.expander("🛠️ Technical error details", expanded=True):
+                    st.code(str(tech_error), language="text")
+
             summary = recommendation.get("summary")
             if summary:
                 st.markdown(
