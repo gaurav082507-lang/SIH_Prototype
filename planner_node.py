@@ -325,6 +325,11 @@ def planner_node(state):
         print(f"[planner] coastal_check_error={exc!r}")
         coastal_check = None
 
+    print(
+        f"[planner] coastal_check lat={latitude} lon={longitude} "
+        f"result={coastal_check!r}"
+    )
+
     if coastal_check is not None and not coastal_check.get("is_coastal", True):
         return {
             "plan": {
