@@ -30,6 +30,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 
 from tools import generate_grid
+from schemas import Plan
 
 load_dotenv()
 
