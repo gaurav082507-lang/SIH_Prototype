@@ -5,7 +5,7 @@ langchain-core
 langchain-groq
 pydantic
 python-dotenv
-
+global_land_mask
 requests
 pandas
 numpy
