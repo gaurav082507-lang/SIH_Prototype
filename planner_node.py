@@ -44,7 +44,7 @@ planner_llm = ChatGroq(
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
-    max_completion_tokens=500
+    max_completion_tokens=500,
     model_kwargs={"response_format": {"type": "json_object"}},
 )
 
