@@ -3,6 +3,7 @@ langgraph
 langchain
 langchain-core
 langchain-groq
+pydantic
 python-dotenv
 
 requests
