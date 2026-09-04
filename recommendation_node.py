@@ -67,13 +67,15 @@ NO-DATA FALLBACK RULE (highest priority — check this first):
 - If EVERY supplied agent field (weather, ocean, tide, cyclone, ecosystem,
   pfz, gis) is null, missing, or empty — meaning there is NO usable marine
   data at all from any agent — do NOT attempt a marine safety assessment.
-- This total absence of data across every agent almost always means the
-  requested coordinates do not lie in a coastal/marine region that any
-  agent's data source actually covers.
+- Do NOT guess or state a reason for the missing data (e.g. do not claim
+  the coordinates are non-coastal). Coastal validity is decided earlier in
+  the pipeline, before this step runs — by the time you see this data, the
+  location has already been confirmed coastal. A total absence of data
+  here means retrieval failed, not that the location is invalid.
 - In this case, and ONLY in this case, respond with:
-  - "summary": "The given coordinates don't lie in a coastal region."
+  - "summary": "Marine data could not be retrieved for this location right now."
   - "risk_level": "LOW"
-  - "recommendation": "Provide coordinates within a coastal or marine area to get a marine assessment."
+  - "recommendation": "Try again shortly, or verify the coordinates and retry."
   - "key_findings": []
   - "safety_advice": []
 - Do not apply this rule if even one agent returned a real (non-null)
@@ -475,6 +477,27 @@ def recommendation_node(state):
         "pfz": state.get("pfz_data"),
         "gis": state.get("gis_data"),
     }
+
+    # Debug visibility: which specialist keys were actually populated
+    # in state by the time this node runs. If every value below prints
+    # None, the specialist nodes either didn't run (check the planner's
+    # `plan.rejected` / `plan.required_agents` / `plan.coastal_check`
+    # for this request) or ran but failed to write their expected state
+    # key (check each specialist node's return dict key names).
+    print(
+        "[recommendation_node] agent_data_presence="
+        + json.dumps(
+            {key: (value is not None) for key, value in agent_data.items()}
+        )
+    )
+    plan_debug = state.get("plan")
+    if isinstance(plan_debug, dict):
+        print(
+            "[recommendation_node] plan_rejected="
+            f"{plan_debug.get('rejected')} "
+            f"required_agents={plan_debug.get('required_agents')} "
+            f"coastal_check={plan_debug.get('coastal_check')}"
+        )
 
     try:
         # -------------------------------------------------
