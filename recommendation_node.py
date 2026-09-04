@@ -15,7 +15,7 @@ import re
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
-
+from langchain_google_genai import ChatGoogleGenerativeAI
 from schemas import Recommendation
 
 print("🔥 NEW RECOMMENDATION NODE LOADED")
@@ -26,20 +26,14 @@ print("FILE:", __file__)
 # LLM
 # =========================================================
 
-recommendation_llm = ChatGroq(
+recommendation_llm = ChatGoogleGenerativeAI(
     model=os.getenv(
-        "GROQ_MODEL_RECOMENDATION",
-        os.getenv(
-            "GROQ_MODEL_RECOMMENDATION",
-            "openai/gpt-oss-120b",
-        ),
+        "GEMINI_MODEL_RECOMMENDATION",
+        "gemini-2.5-flash",
     ),
     temperature=0,
-    api_key=os.getenv("GROQ_API_KEY"),
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
     max_retries=2,
-    reasoning_effort="low",
-    include_reasoning=False,
-    max_completion_tokens=400,
 )
 
 
