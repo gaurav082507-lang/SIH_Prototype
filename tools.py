@@ -370,6 +370,16 @@ def get_ocean_data(latitude: float, longitude: float) -> dict:
 #      failure modes. Used directly by cyclone_node.py.
 #   2. cyclone_tool(latitude, longitude, radius_km) — LangChain @tool
 #      wrapped version of the same call, for an LLM agent.
+#
+# IMPORTANT — "no active cyclone" vs. an actual error:
+# The upstream API's "cyclone" field can legitimately be null/absent
+# when there is simply no active tropical cyclone within radius_km —
+# that is a normal, successful result, not a failure. It is only
+# treated as an error (MISSING_FIELD) when the response as a whole
+# does not indicate success (payload.get("success") is falsy) or is
+# otherwise malformed. If your ORCA backend's actual contract differs
+# (e.g. it never returns null and instead always includes a
+# "no_active_cyclone" style object), adjust the branch below to match.
 
 CYCLONE_API_BASE_URL = os.getenv(
     "CYCLONE_API_BASE_URL",
@@ -394,8 +404,9 @@ def fetch_cyclone_data(latitude: float, longitude: float, radius_km: int = DEFAU
           "success": bool,
           "error_code": str | None,
           "error_message": str | None,
-          "cyclone": dict | None,
-          "queried_at": str,   # ISO8601 UTC
+          "active": bool | None,   # True/False once success, None on failure
+          "cyclone": dict | None,  # populated only when active is True
+          "queried_at": str,       # ISO8601 UTC
           "query": {"lat": ..., "lon": ..., "radius_km": ...}
         }
     """
@@ -427,18 +438,23 @@ def fetch_cyclone_data(latitude: float, longitude: float, radius_km: int = DEFAU
     except ValueError:
         return _cyclone_failure("INVALID_JSON", "Cyclone API response was not valid JSON")
 
-    cyclone = payload.get("cyclone")
-    if cyclone is None:
+    if not isinstance(payload, dict) or not payload.get("success", True):
+        # Upstream explicitly reported failure (or gave us something
+        # that isn't even a dict) — this is a real error, not "no
+        # active cyclone".
         return _cyclone_failure(
-            "MISSING_FIELD",
-            "Response did not contain a 'cyclone' object",
+            "UPSTREAM_FAILURE",
+            "Cyclone API reported failure",
             raw_text=str(payload)[:500],
         )
+
+    cyclone = payload.get("cyclone")
 
     return {
         "success": True,
         "error_code": None,
         "error_message": None,
+        "active": cyclone is not None,
         "cyclone": cyclone,
         "queried_at": datetime.now(timezone.utc).isoformat(),
         "query": {"lat": latitude, "lon": longitude, "radius_km": radius_km},
@@ -450,6 +466,7 @@ def _cyclone_failure(error_code: str, message: str, raw_text: str = None) -> dic
         "success": False,
         "error_code": error_code,
         "error_message": message,
+        "active": None,
         "cyclone": None,
         "queried_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -471,17 +488,37 @@ def cyclone_tool(latitude: float, longitude: float, radius_km: int = DEFAULT_RAD
         radius_km: Search radius in kilometers (default 500km).
 
     Returns:
-        A JSON string with cyclone activity status, name, distance,
-        category, wind speeds, pressure, movement, warning level, and
-        forecast track. If the API call fails, returns a JSON string
-        with status "UNAVAILABLE" and an error message instead of
-        raising or fabricating data.
+        A JSON string with a consistent shape on every path:
+            {
+              "active": bool | None,   # True/False once the check
+                                        # succeeded, None if the check
+                                        # itself failed
+              "status": "OK" | "NO_ACTIVE_CYCLONE" | "UNAVAILABLE",
+              "cyclone": dict | None,  # name, distance, category, wind
+                                       # speeds, pressure, movement,
+                                       # warning level, forecast track —
+                                       # populated only when active
+              "error": str | None,    # populated only when unavailable
+            }
     """
     result = fetch_cyclone_data(latitude, longitude, radius_km)
     if not result["success"]:
         return json.dumps({
             "active": None,
             "status": "UNAVAILABLE",
+            "cyclone": None,
             "error": result["error_message"],
         })
-    return json.dumps(result["cyclone"])
+    if not result["active"]:
+        return json.dumps({
+            "active": False,
+            "status": "NO_ACTIVE_CYCLONE",
+            "cyclone": None,
+            "error": None,
+        })
+    return json.dumps({
+        "active": True,
+        "status": "OK",
+        "cyclone": result["cyclone"],
+        "error": None,
+    })
