@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import textwrap
+import html
 from datetime import datetime
 
 from graph import marine_graph
@@ -33,6 +34,7 @@ LOCATION_PRESETS = {
     "Kanyakumari, Tamil Nadu": (8.0883, 77.5385),
 }
 
+
 AVAILABLE_AGENTS = [
     ("🌤️", "Weather", "weather"),
     ("🌊", "Ocean", "ocean"),
@@ -43,12 +45,14 @@ AVAILABLE_AGENTS = [
     ("🗺️", "GIS", "gis"),
 ]
 
+
 RISK_COLORS = {
     "LOW": "🟢",
     "MODERATE": "🟡",
     "HIGH": "🟠",
     "SEVERE": "🔴",
 }
+
 
 SUGGESTED_QUESTIONS = [
     "Where is the nearest Potential Fishing Zone today?",
@@ -85,14 +89,17 @@ st.markdown(
                     transparent 35%
                 ),
                 #050b16;
+
             color: #e8f1ff;
         }
+
 
         .block-container {
             max-width: 1300px;
             padding-top: 2rem;
             padding-bottom: 3rem;
         }
+
 
         section[data-testid="stSidebar"] {
             background:
@@ -102,16 +109,20 @@ st.markdown(
                     #06101f 50%,
                     #040b16 100%
                 );
+
             border-right: 1px solid rgba(0, 180, 216, 0.18);
         }
+
 
         section[data-testid="stSidebar"] * {
             color: #dcecff;
         }
 
+
         .hero {
             padding: 30px 34px;
             border-radius: 24px;
+
             background:
                 linear-gradient(
                     135deg,
@@ -119,15 +130,21 @@ st.markdown(
                     rgba(0, 180, 216, 0.08),
                     rgba(4, 20, 40, 0.70)
                 );
+
             border: 1px solid rgba(0, 180, 216, 0.20);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.35);
+
             margin-bottom: 22px;
         }
+
 
         .hero-title {
             font-size: 40px;
             font-weight: 800;
             letter-spacing: -1px;
+
             background:
                 linear-gradient(
                     90deg,
@@ -135,9 +152,11 @@ st.markdown(
                     #8be9ff,
                     #4cc9f0
                 );
+
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
 
         .hero-subtitle {
             color: #9bb4d0;
@@ -145,143 +164,234 @@ st.markdown(
             margin-top: 6px;
         }
 
+
         .status-pill {
             display: inline-block;
+
             padding: 7px 14px;
             border-radius: 999px;
+
             background: rgba(0, 180, 216, 0.12);
             border: 1px solid rgba(0, 180, 216, 0.25);
+
             color: #6ee7ff;
             font-size: 13px;
             font-weight: 600;
         }
 
+
         .section-title {
             font-size: 22px;
             font-weight: 700;
+
             color: #edf7ff;
+
             margin-top: 24px;
             margin-bottom: 14px;
         }
 
+
         .risk-card {
             padding: 28px;
+
             border-radius: 20px;
+
             background:
                 linear-gradient(
                     135deg,
                     rgba(15, 35, 60, 0.78),
                     rgba(7, 18, 32, 0.90)
                 );
+
             border: 1px solid rgba(120, 190, 230, 0.16);
-            box-shadow: 0 20px 55px rgba(0, 0, 0, 0.28);
+
+            box-shadow:
+                0 20px 55px rgba(0, 0, 0, 0.28);
+
             margin-bottom: 18px;
         }
 
+
         .risk-label {
             color: #8da9c4;
+
             font-size: 13px;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
+
             margin-bottom: 8px;
         }
 
+
         .risk-value {
             font-size: 38px;
+
             font-weight: 800;
+
             color: #edf7ff;
         }
 
+
         .recommendation-card {
             padding: 26px;
+
             border-radius: 20px;
+
             background:
                 linear-gradient(
                     135deg,
                     rgba(0, 119, 182, 0.18),
                     rgba(6, 24, 43, 0.82)
                 );
+
             border: 1px solid rgba(0, 180, 216, 0.25);
-            box-shadow: 0 20px 55px rgba(0, 0, 0, 0.28);
+
+            box-shadow:
+                0 20px 55px rgba(0, 0, 0, 0.28);
+
             margin-bottom: 18px;
         }
 
+
         .card-title {
             font-size: 13px;
+
             color: #82a6c9;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
+
             margin-bottom: 8px;
         }
 
+
         .recommendation-text {
             font-size: 18px;
+
             line-height: 1.7;
+
             color: #dcecff;
         }
+
 
         .recommendation-box {
             padding: 24px;
+
             border-radius: 18px;
+
             background:
                 rgba(10, 28, 48, 0.72);
+
             border: 1px solid rgba(120, 190, 230, 0.14);
+
             color: #dcecff;
+
             font-size: 17px;
+
             line-height: 1.7;
+
+            margin-bottom: 10px;
         }
 
+
         .chip-btn button {
-            background: rgba(0, 180, 216, 0.10) !important;
-            border: 1px solid rgba(0, 180, 216, 0.30) !important;
-            color: #bfe9ff !important;
-            font-weight: 500 !important;
-            border-radius: 999px !important;
-            box-shadow: none !important;
+            background:
+                rgba(0, 180, 216, 0.10) !important;
+
+            border:
+                1px solid rgba(0, 180, 216, 0.30) !important;
+
+            color:
+                #bfe9ff !important;
+
+            font-weight:
+                500 !important;
+
+            border-radius:
+                999px !important;
+
+            box-shadow:
+                none !important;
         }
+
 
         textarea,
         input {
             color: #eaf6ff !important;
         }
 
+
         div[data-baseweb="input"] > div,
         div[data-baseweb="textarea"],
         div[data-baseweb="select"] > div {
-            background-color: rgba(8, 22, 38, 0.85) !important;
-            border: 1px solid rgba(80, 170, 210, 0.20) !important;
-            border-radius: 12px !important;
+
+            background-color:
+                rgba(8, 22, 38, 0.85) !important;
+
+            border:
+                1px solid rgba(80, 170, 210, 0.20) !important;
+
+            border-radius:
+                12px !important;
         }
 
+
         div.stButton > button {
+
             width: 100%;
+
             border: none;
+
             border-radius: 12px;
+
             padding: 10px 18px;
+
             font-weight: 700;
+
             color: white;
+
             background:
                 linear-gradient(
                     90deg,
                     #0077b6,
                     #00b4d8
                 );
-            box-shadow: 0 8px 25px rgba(0, 180, 216, 0.20);
-            transition: 0.2s ease;
+
+            box-shadow:
+                0 8px 25px rgba(0, 180, 216, 0.20);
+
+            transition:
+                0.2s ease;
         }
+
 
         div.stButton > button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(0, 180, 216, 0.32);
+
+            transform:
+                translateY(-2px);
+
+            box-shadow:
+                0 12px 32px rgba(0, 180, 216, 0.32);
         }
 
+
         .footer {
+
             text-align: center;
+
             color: #526b84;
+
             font-size: 12px;
+
             margin-top: 40px;
+
             padding-top: 18px;
-            border-top: 1px solid rgba(100, 180, 220, 0.08);
+
+            border-top:
+                1px solid rgba(100, 180, 220, 0.08);
         }
 
         </style>
@@ -299,6 +409,7 @@ st.markdown(
     textwrap.dedent(
         """
         <div class="hero">
+
             <div class="status-pill">
                 ● AI MARINE INTELLIGENCE SYSTEM
             </div>
@@ -311,6 +422,7 @@ st.markdown(
                 Ask in plain language — ORCA analyzes marine conditions
                 and provides an evidence-based final assessment.
             </div>
+
         </div>
         """
     ),
@@ -325,15 +437,22 @@ st.markdown(
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+
 if "latitude" not in st.session_state:
     st.session_state.latitude = 19.076000
+
 
 if "longitude" not in st.session_state:
     st.session_state.longitude = 72.877700
 
+
 if "pending_question" not in st.session_state:
     st.session_state.pending_question = None
 
+
+# ============================================================
+# HELPERS
+# ============================================================
 
 def _apply_preset():
     preset = LOCATION_PRESETS.get(
@@ -351,6 +470,18 @@ def _queue_question(text):
     st.session_state.pending_question = text
 
 
+def _safe_html(value):
+    """
+    Escape model-generated text before inserting it into HTML.
+    """
+    if value is None:
+        return ""
+
+    return html.escape(
+        str(value)
+    )
+
+
 # ============================================================
 # SIDEBAR
 # ============================================================
@@ -358,11 +489,16 @@ def _queue_question(text):
 with st.sidebar:
 
     st.markdown("## 🌊 ORCA")
-    st.caption("Marine Intelligence Platform")
+
+    st.caption(
+        "Marine Intelligence Platform"
+    )
 
     st.divider()
 
-    st.markdown("### 📍 Target Location")
+    st.markdown(
+        "### 📍 Target Location"
+    )
 
     st.selectbox(
         "Quick Location",
@@ -400,7 +536,9 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("### 🤖 Intelligence System")
+    st.markdown(
+        "### 🤖 Intelligence System"
+    )
 
     st.caption(
         "ORCA automatically selects the marine intelligence "
@@ -421,205 +559,324 @@ with st.sidebar:
         disabled=not st.session_state.messages,
         help="Clear the conversation history.",
     ):
+
         st.session_state.messages = []
+
         st.session_state.pending_question = None
+
         st.rerun()
 
 
 # ============================================================
-# FINAL RESULT ONLY
+# FINAL RESULT RENDERING
 # ============================================================
 
 def render_final_result(result):
     """
-    Display ONLY:
-    1. Final Risk Level
-    2. Marine Analysis
-    3. Final Recommendation
-    4. Key Findings
-    5. Safety Advice
+    Display ONLY the final user-facing recommendation.
 
-    Planner JSON, raw agent data, agent findings,
-    technical errors, and complete LangGraph state are hidden.
+    Hidden from UI:
+    - Planner decision
+    - Planner JSON
+    - Agent statuses
+    - Agent findings
+    - Raw agent data
+    - Complete LangGraph state
+    - Internal technical errors
     """
 
-    recommendation = result.get("recommendation")
+    if not isinstance(result, dict):
+        st.warning(
+            "No valid marine intelligence result was generated."
+        )
+        return
+
+
+    recommendation = result.get(
+        "recommendation"
+    )
+
 
     if not recommendation:
-        st.warning("No final marine recommendation was generated.")
+        st.warning(
+            "No final marine recommendation was generated."
+        )
         return
+
 
     if not isinstance(recommendation, dict):
-        st.warning("Invalid final recommendation format.")
+        st.warning(
+            "Invalid final recommendation format."
+        )
         return
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # RISK LEVEL
-    # --------------------------------------------------------
+    # ========================================================
 
     risk_level = str(
-        recommendation.get("risk_level", "UNKNOWN")
-    ).upper()
+        recommendation.get(
+            "risk_level",
+            "UNKNOWN"
+        )
+    ).upper().strip()
+
 
     risk_icon = RISK_COLORS.get(
         risk_level,
-        "⚪",
+        "⚪"
     )
 
+
     st.markdown(
-        '<div class="section-title">🎯 Marine Intelligence Result</div>',
+        '<div class="section-title">'
+        '🎯 Marine Intelligence Result'
+        '</div>',
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        f"""
-        <div class="risk-card">
-            <div class="risk-label">
-                Risk Level
-            </div>
 
-            <div class="risk-value">
-                {risk_icon} {risk_level}
+    safe_risk_icon = _safe_html(
+        risk_icon
+    )
+
+    safe_risk_level = _safe_html(
+        risk_level
+    )
+
+
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <div class="risk-card">
+
+                <div class="risk-label">
+                    Risk Level
+                </div>
+
+                <div class="risk-value">
+                    {safe_risk_icon}
+                    {safe_risk_level}
+                </div>
+
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
 
-    # --------------------------------------------------------
-    # FINAL MARINE ANALYSIS
-    # --------------------------------------------------------
 
-    summary = recommendation.get("summary")
+    # ========================================================
+    # MARINE ANALYSIS
+    # ========================================================
+
+    summary = recommendation.get(
+        "summary"
+    )
+
 
     if summary:
-        st.markdown(
-            f"""
-            <div class="recommendation-card">
-                <div class="card-title">
-                    Marine Analysis
-                </div>
 
-                <div class="recommendation-text">
-                    {summary}
+        safe_summary = _safe_html(
+            summary
+        )
+
+        st.markdown(
+            textwrap.dedent(
+                f"""
+                <div class="recommendation-card">
+
+                    <div class="card-title">
+                        Marine Analysis
+                    </div>
+
+                    <div class="recommendation-text">
+                        {safe_summary}
+                    </div>
+
                 </div>
-            </div>
-            """,
+                """
+            ),
             unsafe_allow_html=True,
         )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # FINAL RECOMMENDATION
-    # --------------------------------------------------------
+    # ========================================================
 
     final_recommendation = recommendation.get(
         "recommendation"
     )
 
+
     if final_recommendation:
+
+        safe_recommendation = _safe_html(
+            final_recommendation
+        )
+
         st.markdown(
             "### 🚢 Recommendation"
         )
 
         st.markdown(
-            f"""
-            <div class="recommendation-box">
-                {final_recommendation}
-            </div>
-            """,
+            textwrap.dedent(
+                f"""
+                <div class="recommendation-box">
+                    {safe_recommendation}
+                </div>
+                """
+            ),
             unsafe_allow_html=True,
         )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # KEY FINDINGS
-    # --------------------------------------------------------
+    # ========================================================
 
     key_findings = recommendation.get(
         "key_findings"
     )
 
-    if isinstance(key_findings, list) and key_findings:
-        st.markdown("### ⚠️ Key Findings")
+
+    if (
+        isinstance(key_findings, list)
+        and key_findings
+    ):
+
+        st.markdown(
+            "### ⚠️ Key Findings"
+        )
 
         for finding in key_findings:
+
+            safe_finding = _safe_html(
+                finding
+            )
+
             st.markdown(
-                f"""
-                <div class="recommendation-box">
-                    • {finding}
-                </div>
-                """,
+                textwrap.dedent(
+                    f"""
+                    <div class="recommendation-box">
+                        • {safe_finding}
+                    </div>
+                    """
+                ),
                 unsafe_allow_html=True,
             )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # SAFETY ADVICE
-    # --------------------------------------------------------
+    # ========================================================
 
     safety_advice = recommendation.get(
         "safety_advice"
     )
 
-    if isinstance(safety_advice, list) and safety_advice:
-        st.markdown("### 🧭 Safety Advice")
+
+    if (
+        isinstance(safety_advice, list)
+        and safety_advice
+    ):
+
+        st.markdown(
+            "### 🧭 Safety Advice"
+        )
 
         for advice in safety_advice:
-            st.warning(advice)
+
+            st.warning(
+                str(advice)
+            )
 
 
 # ============================================================
-# RUN GRAPH
+# GRAPH EXECUTION
 # ============================================================
 
 def run_marine_graph(initial_state):
     """
-    Stream graph updates internally, but do not expose
-    intermediate agent data in the UI.
+    Run the LangGraph pipeline.
+
+    Intermediate states are intentionally not rendered
+    to the user. Only the final state is returned to the UI.
     """
 
-    final_state = dict(initial_state)
+    final_state = dict(
+        initial_state
+    )
+
 
     try:
+
         got_updates = False
+
 
         for step_output in marine_graph.stream(
             initial_state,
             stream_mode="updates",
         ):
-            if not isinstance(step_output, dict):
+
+            if not isinstance(
+                step_output,
+                dict
+            ):
                 continue
+
 
             got_updates = True
 
+
             for _, node_update in step_output.items():
 
-                if isinstance(node_update, dict):
-                    final_state.update(node_update)
+                if isinstance(
+                    node_update,
+                    dict
+                ):
 
-            # Yield only state internally for progress handling.
-            yield dict(final_state)
+                    final_state.update(
+                        node_update
+                    )
+
 
         if got_updates:
+            yield final_state
             return
 
+
     except Exception:
+
         pass
 
-    # Fallback
+
+    # --------------------------------------------------------
+    # FALLBACK
+    # --------------------------------------------------------
+
     final_state = marine_graph.invoke(
         initial_state
     )
+
 
     yield final_state
 
 
 # ============================================================
-# CONVERSATION HISTORY
+# EXISTING CONVERSATION
 # ============================================================
 
 for msg in st.session_state.messages:
 
     with st.chat_message("user"):
-        st.markdown(msg["question"])
+
+        st.markdown(
+            msg["question"]
+        )
+
 
     with st.chat_message(
         "assistant",
@@ -627,11 +884,14 @@ for msg in st.session_state.messages:
     ):
 
         if msg.get("error"):
+
             st.error(
-                "Marine analysis failed. Please try again."
+                "Marine analysis failed. "
+                "Please try again."
             )
 
-        else:
+        elif msg.get("result"):
+
             render_final_result(
                 msg["result"]
             )
@@ -644,13 +904,17 @@ for msg in st.session_state.messages:
 if not st.session_state.messages:
 
     st.markdown(
-        '<div class="section-title">💡 Try asking</div>',
+        '<div class="section-title">'
+        '💡 Try asking'
+        '</div>',
         unsafe_allow_html=True,
     )
+
 
     cols = st.columns(
         len(SUGGESTED_QUESTIONS)
     )
+
 
     for col, question in zip(
         cols,
@@ -664,11 +928,16 @@ if not st.session_state.messages:
                 unsafe_allow_html=True,
             )
 
+
             if st.button(
                 question,
                 key=f"suggested_{question}",
             ):
-                _queue_question(question)
+
+                _queue_question(
+                    question
+                )
+
 
             st.markdown(
                 "</div>",
@@ -685,11 +954,16 @@ prompt = st.chat_input(
     "'Is it safe to fish near Kochi tomorrow?'"
 )
 
+
 if (
     not prompt
     and st.session_state.pending_question
 ):
-    prompt = st.session_state.pending_question
+
+    prompt = (
+        st.session_state.pending_question
+    )
+
     st.session_state.pending_question = None
 
 
@@ -700,14 +974,26 @@ if (
 if prompt:
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+
+        st.markdown(
+            prompt
+        )
+
 
     initial_state = {
-        "latitude": float(latitude),
-        "longitude": float(longitude),
+        "latitude": float(
+            latitude
+        ),
+
+        "longitude": float(
+            longitude
+        ),
+
         "user_question": prompt.strip(),
+
         "status": "STARTED",
     }
+
 
     with st.chat_message(
         "assistant",
@@ -716,6 +1002,7 @@ if prompt:
 
         result = None
         error = None
+
 
         with st.status(
             "🤖 Analyzing marine conditions...",
@@ -727,23 +1014,31 @@ if prompt:
                 for state in run_marine_graph(
                     initial_state
                 ):
+
                     result = state
 
+
                 status.update(
-                    label="Marine intelligence analysis completed",
+                    label=(
+                        "Marine intelligence "
+                        "analysis completed"
+                    ),
                     state="complete",
                     expanded=False,
                 )
 
+
             except Exception as e:
 
                 error = e
+
 
                 status.update(
                     label="Marine analysis failed",
                     state="error",
                     expanded=False,
                 )
+
 
         if error:
 
@@ -758,13 +1053,23 @@ if prompt:
                 result
             )
 
+
+    # --------------------------------------------------------
+    # SAVE CONVERSATION
+    # --------------------------------------------------------
+
     st.session_state.messages.append(
         {
             "question": prompt,
+
             "latitude": latitude,
+
             "longitude": longitude,
+
             "result": result,
+
             "error": error,
+
             "timestamp": datetime.now().isoformat(
                 timespec="seconds"
             ),
@@ -780,9 +1085,13 @@ st.markdown(
     textwrap.dedent(
         """
         <div class="footer">
+
             🌊 ORCA Marine Intelligence Platform
+
             <br>
+
             Agentic AI • LangGraph • Marine Data Intelligence
+
         </div>
         """
     ),
