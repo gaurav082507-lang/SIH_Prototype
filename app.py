@@ -284,7 +284,7 @@ st.markdown(
         .branch-row {
             display: flex;
             justify-content: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 14px;
             padding-top: 0;
         }
