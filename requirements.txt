@@ -9,7 +9,7 @@ global_land_mask
 requests
 pandas
 numpy
-
+langchain_google_genai
 openmeteo-requests
 requests-cache
 retry-requests
