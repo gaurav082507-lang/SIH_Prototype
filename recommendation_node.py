@@ -29,7 +29,7 @@ print("FILE:", __file__)
 recommendation_llm = ChatGoogleGenerativeAI(
     model=os.getenv(
         "GEMINI_MODEL_RECOMMENDATION",
-        "gemini-2.5-flash",
+        "gemini-3.5-flash",
     ),
     temperature=0,
     google_api_key=os.getenv("GOOGLE_API_KEY"),
