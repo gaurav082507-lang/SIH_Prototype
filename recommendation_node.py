@@ -1,14 +1,16 @@
 # recommendation_node.py
 #
-# Groq 8K-friendly final recommendation node.
-# - Uses openai/gpt-oss-120b by default.
-# - Keeps the prompt deliberately small.
-# - Does NOT use response_format/json_schema, avoiding Groq JSON validation
-#   failures while keeping local JSON parsing + Pydantic validation.
-# - Sends only compacted specialist data to the model.
-# - Keeps complete agent data in the returned recommendation.
-# - Conversation history is intentionally omitted from the LLM prompt to
-#   protect the 8K TPM budget. The current user question remains authoritative.
+# Final Marine Intelligence Recommendation Agent.
+#
+# Important:
+# - Uses GPT-OSS 120B by default.
+# - Uses low reasoning to preserve completion budget.
+# - Does NOT use Groq response_format/json_schema.
+# - Locally parses and validates JSON.
+# - Handles normal JSON, fenced JSON, surrounding text,
+#   and double-encoded JSON.
+# - Keeps complete specialist data in the returned recommendation.
+# - Keeps the LLM prompt compact for the Groq 8K TPM limit.
 
 import json
 import os
@@ -19,29 +21,40 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 
 from schemas import Recommendation
+
+
 print("🔥 NEW RECOMMENDATION NODE LOADED")
 print("FILE:", __file__)
 
-# ---------------------------------------------------------
+
+# =========================================================
 # LLM
-# ---------------------------------------------------------
+# =========================================================
 
 recommendation_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL_RECOMENDATION", "openai/gpt-oss-120b"),
+    model=os.getenv(
+        "GROQ_MODEL_RECOMENDATION",
+        "openai/gpt-oss-120b",
+    ),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=2,
+
+    # GPT-OSS is a reasoning model.
+    # Low reasoning leaves enough budget for the JSON answer.
     reasoning_effort="low",
+
+    # Do not include reasoning in response.content.
     include_reasoning=False,
+
+    # Give the model enough room for the final JSON.
     max_completion_tokens=300,
 )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # PROMPT
-# ---------------------------------------------------------
-# Keep this prompt short. Groq's free limit for GPT-OSS 120B is 8K TPM,
-# so the data budget below is intentionally conservative.
+# =========================================================
 
 RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template(
     """
@@ -63,7 +76,11 @@ RULES:
   from the available data and say that the automated risk check had
   insufficient data.
 - Keep the response concise.
-- Return ONLY one valid JSON object. No markdown. No explanation outside JSON.
+- Return ONLY one valid JSON object.
+- No markdown.
+- No explanation outside JSON.
+- Do NOT wrap the JSON object inside a JSON string.
+- Do NOT escape the entire JSON object.
 
 USER QUESTION:
 {user_question}
@@ -98,25 +115,24 @@ LOW, MODERATE, HIGH, SEVERE
 )
 
 
-# ---------------------------------------------------------
-# PROMPT-SIZE LIMITS
-# ---------------------------------------------------------
-# These limits are deliberately conservative for Groq's 8K TPM limit.
-# The model sees compacted data only; the full data is still returned.
+# =========================================================
+# PROMPT SIZE LIMITS
+# =========================================================
 
 MAX_LIST_LEN = 3
 MAX_COMPACT_DEPTH = 4
 
-# Maximum characters of specialist data sent to the model.
-# 10,000 chars is intentionally below the previous 24,000-char budget.
-MAX_AGENT_DATA_CHARS = 10000
+# Keep this conservative for the 8K TPM limit.
+MAX_AGENT_DATA_CHARS = 8000
 
-# Maximum user-question size sent to the model.
 MAX_QUESTION_CHARS = 1800
 
-# Maximum risk JSON size sent to the model.
-MAX_RISK_CHARS = 2500
+MAX_RISK_CHARS = 2000
 
+
+# =========================================================
+# DATA COMPACTION
+# =========================================================
 
 def _compact_for_llm(
     obj,
@@ -125,15 +141,14 @@ def _compact_for_llm(
     _depth=0,
 ):
     """
-    Recursively shrink long lists and deeply nested structures.
-
-    Keeps only a few representative list entries so time-series/grid data
-    cannot consume the entire LLM prompt.
+    Recursively reduce large specialist outputs before
+    sending them to the LLM.
     """
+
     if _depth >= max_depth:
-        # At excessive nesting depth, return a compact string representation.
         if isinstance(obj, (dict, list)):
             return str(obj)
+
         return obj
 
     if isinstance(obj, dict):
@@ -148,8 +163,10 @@ def _compact_for_llm(
         }
 
     if isinstance(obj, list):
+
         if len(obj) > max_list_len:
-            kept = obj[: max_list_len - 1]
+
+            kept_count = max(1, max_list_len - 1)
 
             compacted = [
                 _compact_for_llm(
@@ -158,13 +175,15 @@ def _compact_for_llm(
                     max_depth,
                     _depth + 1,
                 )
-                for item in kept
+                for item in obj[:kept_count]
             ]
 
-            omitted = len(obj) - len(kept)
+            omitted = len(obj) - kept_count
+
             compacted.append(
-                f"...{omitted} more entries omitted for brevity..."
+                f"...{omitted} more entries omitted..."
             )
+
             return compacted
 
         return [
@@ -180,8 +199,22 @@ def _compact_for_llm(
     return obj
 
 
+# =========================================================
+# SAFE JSON SERIALIZATION
+# =========================================================
+
 def _safe_json_text(obj, max_chars):
-    """Serialize an object to compact JSON and cap its size."""
+    """
+    Serialize data as valid JSON.
+
+    IMPORTANT:
+    Never cut raw JSON at an arbitrary character position because
+    that can produce malformed JSON.
+
+    If the serialized data is too large, return a valid compact
+    JSON object describing the truncation.
+    """
+
     text = json.dumps(
         obj,
         ensure_ascii=False,
@@ -192,54 +225,246 @@ def _safe_json_text(obj, max_chars):
     if len(text) <= max_chars:
         return text
 
-    return (
-        text[:max_chars]
-        + ',"_truncated":"additional data omitted to protect LLM token budget"}'
-        if text.startswith("{")
-        else text[:max_chars]
-        + "\n... [truncated to protect LLM token budget] ..."
+    # Return VALID JSON instead of slicing the original JSON.
+    return json.dumps(
+        {
+            "_truncated": True,
+            "_message": (
+                "Specialist data was reduced because it exceeded "
+                "the recommendation model input budget."
+            ),
+            "_data_preview": text[: max(500, max_chars // 4)],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 
+# =========================================================
+# CLEAN MODEL CONTENT
+# =========================================================
+
 def _clean_model_content(content):
-    """Remove accidental markdown fences from model output."""
+    """
+    Convert LangChain response content into a plain string.
+
+    Handles content blocks and markdown fences.
+    """
+
     if isinstance(content, list):
+
         parts = []
 
         for item in content:
+
             if isinstance(item, dict):
+
                 text = item.get("text")
+
                 if text:
                     parts.append(str(text))
+
             else:
                 parts.append(str(item))
 
         content = "".join(parts)
 
-    content = str(content).strip()
+    content = str(content or "").strip()
 
+    # Remove ```json ... ```
     if content.startswith("```json"):
-        content = content[7:]
-    elif content.startswith("```"):
-        content = content[3:]
 
-    if content.endswith("```"):
-        content = content[:-3]
+        content = content[len("```json"):].strip()
+
+        if content.endswith("```"):
+            content = content[:-3].strip()
+
+    # Remove ``` ... ```
+    elif content.startswith("```"):
+
+        content = content[3:].strip()
+
+        if content.endswith("```"):
+            content = content[:-3].strip()
 
     return content.strip()
 
 
-# ---------------------------------------------------------
+# =========================================================
+# ROBUST JSON PARSER
+# =========================================================
+
+def _parse_recommendation_json(content):
+    """
+    Parse recommendation JSON robustly.
+
+    Supports:
+
+    1. Normal JSON object:
+       {"risk_level":"HIGH",...}
+
+    2. JSON surrounded by text:
+       Here is the result:
+       {"risk_level":"HIGH",...}
+
+    3. Double-encoded JSON:
+       "{\"risk_level\":\"HIGH\",...}"
+
+    4. JSON returned as a quoted string containing JSON.
+
+    5. Markdown fenced JSON.
+    """
+
+    content = _clean_model_content(content)
+
+    print(
+        "[recommendation_node] "
+        f"cleaned_response_chars={len(content)}"
+    )
+
+    print(
+        "[recommendation_node] "
+        f"cleaned_response={repr(content[:4000])}"
+    )
+
+    if not content:
+        raise ValueError(
+            "Recommendation model returned an empty response."
+        )
+
+    # -----------------------------------------------------
+    # Attempt 1:
+    # Direct JSON parsing
+    # -----------------------------------------------------
+
+    try:
+
+        parsed = json.loads(content)
+
+        # Normal expected case.
+        if isinstance(parsed, dict):
+            return parsed
+
+        # -------------------------------------------------
+        # Double-encoded JSON
+        #
+        # Example:
+        # "{\"risk_level\":\"HIGH\",...}"
+        # -------------------------------------------------
+
+        if isinstance(parsed, str):
+
+            inner = parsed.strip()
+
+            if inner:
+
+                try:
+                    inner_parsed = json.loads(inner)
+
+                    if isinstance(inner_parsed, dict):
+                        return inner_parsed
+
+                except json.JSONDecodeError:
+                    pass
+
+    except json.JSONDecodeError:
+        pass
+
+    # -----------------------------------------------------
+    # Attempt 2:
+    # Find a JSON object embedded in surrounding text.
+    # -----------------------------------------------------
+
+    start_positions = [
+        match.start()
+        for match in re.finditer(r"\{", content)
+    ]
+
+    for start in start_positions:
+
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index in range(start, len(content)):
+
+            char = content[index]
+
+            # ---------------------------------------------
+            # Inside JSON string
+            # ---------------------------------------------
+
+            if in_string:
+
+                if escaped:
+                    escaped = False
+
+                elif char == "\\":
+                    escaped = True
+
+                elif char == '"':
+                    in_string = False
+
+                continue
+
+            # ---------------------------------------------
+            # Outside JSON string
+            # ---------------------------------------------
+
+            if char == '"':
+                in_string = True
+
+            elif char == "{":
+                depth += 1
+
+            elif char == "}":
+
+                depth -= 1
+
+                if depth == 0:
+
+                    candidate = content[
+                        start:index + 1
+                    ]
+
+                    try:
+
+                        parsed = json.loads(candidate)
+
+                        if isinstance(parsed, dict):
+                            return parsed
+
+                    except json.JSONDecodeError:
+                        pass
+
+                    break
+
+    # -----------------------------------------------------
+    # Nothing worked.
+    # -----------------------------------------------------
+
+    raise ValueError(
+        "Recommendation model returned non-JSON content: "
+        f"{content[:1200]!r}"
+    )
+
+
+# =========================================================
 # RECOMMENDATION NODE
-# ---------------------------------------------------------
+# =========================================================
 
 def recommendation_node(state):
     """
     Final Recommendation Agent.
 
-    Combines specialist outputs and rule-based risk assessment.
-    Only compact data is sent to the LLM. Complete specialist data remains
-    available in the returned recommendation.
+    Combines:
+      - specialist agent outputs
+      - rule-based risk assessment
+      - current user question
+
+    Only compact data is sent to the LLM.
+
+    Complete specialist data is retained in the final output.
     """
 
     user_question = str(
@@ -248,9 +473,9 @@ def recommendation_node(state):
 
     risk_signals = state.get("risk_signals") or {}
 
-    # -----------------------------------------------------
-    # Collect specialist outputs
-    # -----------------------------------------------------
+    # =====================================================
+    # COLLECT SPECIALIST DATA
+    # =====================================================
 
     agent_data = {
         "weather": state.get("weather_data"),
@@ -263,11 +488,14 @@ def recommendation_node(state):
     }
 
     try:
-        # -------------------------------------------------
-        # Compact specialist data
-        # -------------------------------------------------
 
-        compact_agent_data = _compact_for_llm(agent_data)
+        # =================================================
+        # COMPACT SPECIALIST DATA
+        # =================================================
+
+        compact_agent_data = _compact_for_llm(
+            agent_data
+        )
 
         agent_data_json = _safe_json_text(
             compact_agent_data,
@@ -279,9 +507,9 @@ def recommendation_node(state):
             MAX_RISK_CHARS,
         )
 
-        # -------------------------------------------------
-        # Debug information
-        # -------------------------------------------------
+        # =================================================
+        # BUILD PROMPT
+        # =================================================
 
         prompt_text = RECOMMENDATION_PROMPT.format(
             user_question=user_question,
@@ -290,109 +518,50 @@ def recommendation_node(state):
         )
 
         print(
-            f"[recommendation_node] prompt_chars={len(prompt_text)}"
+            "[recommendation_node] "
+            f"prompt_chars={len(prompt_text)}"
         )
 
-        # -------------------------------------------------
-        # Call LLM
-        # -------------------------------------------------
+        print(
+            "[recommendation_node] "
+            f"agent_data_chars={len(agent_data_json)}"
+        )
+
+        print(
+            "[recommendation_node] "
+            f"risk_chars={len(risk_json)}"
+        )
+
+        # =================================================
+        # CALL LLM
+        # =================================================
 
         response = recommendation_llm.invoke(
-            RECOMMENDATION_PROMPT.format(
-                user_question=user_question,
-                agent_data=agent_data_json,
-                risk_signals=risk_json,
-            )
+            prompt_text
         )
 
-        content = _clean_model_content(response.content)
+        # =================================================
+        # RAW RESPONSE
+        # =================================================
+
+        raw_content = response.content
 
         print(
             "[recommendation_node] "
-            f"raw_response_chars={len(content)}"
-        )
-        print(
-            "[recommendation_node] "
-            f"raw_response={repr(content[:4000])}"
+            f"response_content_type={type(raw_content)}"
         )
 
-        # -------------------------------------------------
-        # Parse JSON locally, safely
-        # -------------------------------------------------
+        # =================================================
+        # PARSE RESPONSE
+        # =================================================
 
-        if not content:
-            raise ValueError(
-                "Recommendation model returned an empty response. "
-                "The GPT-OSS completion may have exhausted its budget "
-                "during reasoning."
-            )
+        recommendation = _parse_recommendation_json(
+            raw_content
+        )
 
-        # First try the complete response.
-        recommendation = None
-
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                recommendation = parsed
-        except json.JSONDecodeError:
-            pass
-
-        # If the model added text around the JSON, extract the first
-        # balanced JSON object.
-        if recommendation is None:
-            start_positions = [
-                match.start()
-                for match in re.finditer(r"\\{", content)
-            ]
-
-            for start in start_positions:
-                depth = 0
-                in_string = False
-                escaped = False
-
-                for index in range(start, len(content)):
-                    char = content[index]
-
-                    if in_string:
-                        if escaped:
-                            escaped = False
-                        elif char == "\\\\":
-                            escaped = True
-                        elif char == '"':
-                            in_string = False
-                        continue
-
-                    if char == '"':
-                        in_string = True
-                    elif char == "{":
-                        depth += 1
-                    elif char == "}":
-                        depth -= 1
-
-                        if depth == 0:
-                            candidate = content[start:index + 1]
-
-                            try:
-                                parsed = json.loads(candidate)
-                                if isinstance(parsed, dict):
-                                    recommendation = parsed
-                            except json.JSONDecodeError:
-                                pass
-
-                            break
-
-                if recommendation is not None:
-                    break
-
-        if recommendation is None:
-            raise ValueError(
-                "Recommendation model returned non-JSON content: "
-                f"{content[:1200]!r}"
-            )
-
-        # -------------------------------------------------
-        # Ensure required fields exist
-        # -------------------------------------------------
+        # =================================================
+        # ENSURE REQUIRED FIELDS
+        # =================================================
 
         recommendation.setdefault(
             "summary",
@@ -419,36 +588,112 @@ def recommendation_node(state):
             [],
         )
 
-        # Keep the complete specialist outputs available to the caller/UI.
+        # =================================================
+        # NORMALIZE LIST FIELDS
+        # =================================================
+
+        if not isinstance(
+            recommendation.get("key_findings"),
+            list,
+        ):
+            recommendation["key_findings"] = [
+                str(
+                    recommendation["key_findings"]
+                )
+            ]
+
+        if not isinstance(
+            recommendation.get("safety_advice"),
+            list,
+        ):
+            recommendation["safety_advice"] = [
+                str(
+                    recommendation["safety_advice"]
+                )
+            ]
+
+        # =================================================
+        # NORMALIZE RISK LEVEL
+        # =================================================
+
+        allowed_risk_levels = {
+            "LOW",
+            "MODERATE",
+            "HIGH",
+            "SEVERE",
+        }
+
+        risk_level = str(
+            recommendation.get(
+                "risk_level",
+                "MODERATE",
+            )
+        ).upper()
+
+        if risk_level not in allowed_risk_levels:
+            risk_level = "MODERATE"
+
+        recommendation["risk_level"] = risk_level
+
+        # =================================================
+        # KEEP COMPLETE AGENT DATA
+        # =================================================
+
         recommendation["agent_findings"] = agent_data
 
-        # -------------------------------------------------
-        # Schema validation
-        # -------------------------------------------------
+        # =================================================
+        # SCHEMA VALIDATION
+        # =================================================
 
         try:
-            Recommendation.model_validate(recommendation)
+
+            Recommendation.model_validate(
+                recommendation
+            )
+
         except ValidationError as ve:
-            # Do not fail the whole graph just because the optional schema
-            # has a mismatch. Preserve the generated recommendation and
-            # expose the validation warning for debugging.
+
             recommendation["schema_warning"] = str(ve)
+
+            print(
+                "[recommendation_node] "
+                f"schema warning={str(ve)}"
+            )
+
+        # =================================================
+        # SUCCESS
+        # =================================================
+
+        print(
+            "[recommendation_node] "
+            f"SUCCESS risk_level={recommendation.get('risk_level')}"
+        )
 
         return {
             "recommendation": recommendation,
             "status": "SUCCESS",
         }
 
+    # =====================================================
+    # JSON / PARSING ERROR
+    # =====================================================
+
     except json.JSONDecodeError as e:
+
         print(
-            f"[recommendation_node] JSON parse error: {e}"
+            "[recommendation_node] "
+            f"JSON parse error={repr(e)}"
         )
 
         return {
             "recommendation": {
-                "summary": "Unable to parse the final recommendation.",
+                "summary": (
+                    "Unable to parse the final recommendation."
+                ),
                 "risk_level": "MODERATE",
-                "recommendation": "Please review the available marine data.",
+                "recommendation": (
+                    "Please review the available marine data."
+                ),
                 "key_findings": [],
                 "safety_advice": [],
                 "agent_findings": agent_data,
@@ -457,16 +702,27 @@ def recommendation_node(state):
             "status": "FAILED",
         }
 
+    # =====================================================
+    # GENERAL ERROR
+    # =====================================================
+
     except Exception as e:
+
         print(
-            f"[recommendation_node] Recommendation generation failed: {e}"
+            "[recommendation_node] "
+            "Recommendation generation failed:",
+            repr(e),
         )
 
         return {
             "recommendation": {
-                "summary": "Recommendation generation failed.",
+                "summary": (
+                    "Recommendation generation failed."
+                ),
                 "risk_level": "MODERATE",
-                "recommendation": "Please review the available marine data.",
+                "recommendation": (
+                    "Please review the available marine data."
+                ),
                 "key_findings": [],
                 "safety_advice": [],
                 "agent_findings": agent_data,
