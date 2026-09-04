@@ -35,7 +35,14 @@ load_dotenv()
 planner_llm = ChatMistralAI(
     model=os.getenv("MISTRAL_MODEL", "mistral-small-latest"),
     temperature=0,
-    api_key=os.getenv("MISTRAL_API_KEY")
+    api_key=os.getenv("MISTRAL_API_KEY"),
+    # See the matching comment in recommendation_node.py: no timeout
+    # was set here to begin with, so it's left alone rather than
+    # risking an unverified None crashing this at import time.
+    # max_retries is raised because a 429 (rate limit) needs retries
+    # with backoff to actually recover, which a timeout change cannot
+    # provide.
+    max_retries=6,
 )
 
 
