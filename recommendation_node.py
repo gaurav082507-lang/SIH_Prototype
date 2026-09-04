@@ -30,17 +30,12 @@ from schemas import Recommendation
 # ---------------------------------------------------------
 
 recommendation_llm = ChatGroq(
-    model=os.getenv(
-        "GROQ_MODEL_RECOMMENDATION",
-        "openai/gpt-oss-120b"
-    ),
+    model=os.getenv("GROQ_MODEL_RECOMENDATION", "openai/gpt-oss-120b"),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
-    max_retries=6,
-    model_kwargs={"response_format": {"type": "json_object"}},
-    max_completion_tokens=300
+    max_retries=2,
+    max_completion_tokens=300,
 )
-
 
 # ---------------------------------------------------------
 # PROMPT
