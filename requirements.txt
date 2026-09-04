@@ -2,7 +2,7 @@ streamlit
 langgraph
 langchain
 langchain-core
-langchain-mistralai
+langchain-groq
 python-dotenv
 
 requests
