@@ -32,16 +32,12 @@ load_dotenv()
 # LLM
 # ---------------------------------------------------------
 
-planner_llm = ChatMistralAI(
-    model=os.getenv("MISTRAL_MODEL", "mistral-small-latest"),
+from langchain_groq import ChatGroq
+
+planner_llm = ChatGroq(
+    model=os.getenv("GROQ_MODEL_PLANNER", "llama-3.1-8b-instant"),
     temperature=0,
-    api_key=os.getenv("MISTRAL_API_KEY"),
-    # See the matching comment in recommendation_node.py: no timeout
-    # was set here to begin with, so it's left alone rather than
-    # risking an unverified None crashing this at import time.
-    # max_retries is raised because a 429 (rate limit) needs retries
-    # with backoff to actually recover, which a timeout change cannot
-    # provide.
+    api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
 )
 
