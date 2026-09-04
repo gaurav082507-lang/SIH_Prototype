@@ -18,7 +18,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 
 from schemas import Recommendation
-
+print("🔥 NEW RECOMMENDATION NODE LOADED")
+print("FILE:", __file__)
 
 # ---------------------------------------------------------
 # LLM
