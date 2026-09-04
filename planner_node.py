@@ -67,13 +67,27 @@ Allowed agents:
 - ocean: waves, swell, sea state, ocean conditions
 - tide: high/low tide and tidal conditions
 - cyclone: cyclones, tropical storms, storm warnings
-- ecosystem: marine ecosystem, biodiversity, marine species
+- ecosystem: marine ecosystem, biodiversity, marine species, fish-related data
 - pfz: potential fishing zones / where to fish
 - gis: distance to coast, depth, restricted/protected zones, EEZ, nearest port
 
 Rules:
 - Include every agent whose data is needed.
-- Fishing/fishing trip -> pfz, weather, ocean, tide.
+
+- FISH / FISHING RULE:
+  If the user's question is about fish, fishing, target species,
+  fish availability, fish abundance, fish distribution, fish habitat,
+  fish suitability, or fishing areas, ALWAYS include "ecosystem".
+
+- FISHING TRIP RULE:
+  For a fishing trip, include:
+  "ecosystem", "pfz", "weather", "ocean", "tide".
+
+- PFZ RULE:
+  If the question asks about PFZ, potential fishing zones,
+  fishing hotspots, best fishing locations, or where to fish,
+  include BOTH "ecosystem" and "pfz".
+
 - General safety at sea -> weather, ocean, tide.
 - GIS runs automatically, so it is optional here.
 - Reject only non-marine questions.
@@ -85,7 +99,7 @@ Use exactly these keys:
 rejected, rejection_reason, required_agents, activity, date
 
 Example:
-{{"rejected":false,"rejection_reason":null,"required_agents":["weather","ocean","tide"],"activity":"fishing","date":"{today}"}}
+{{"rejected":false,"rejection_reason":null,"required_agents":["ecosystem","pfz","weather","ocean","tide"],"activity":"fishing","date":"{today}"}}
 
 User question:
 {user_question}
