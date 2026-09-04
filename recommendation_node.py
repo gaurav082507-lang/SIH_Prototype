@@ -1,34 +1,43 @@
 # recommendation_node.py
+#
+# UPDATED: swapped ChatMistralAI -> ChatGroq (JSON mode forced via
+# response_format to reduce parse failures, since Llama models are
+# slightly less reliable at "return only JSON" than Mistral was).
+#
+# Retained from before:
+#   1. Chat memory — includes conversation_history (compacted) in the
+#      prompt, so the model can reference prior turns ("as found
+#      earlier...") instead of treating every message as a cold start.
+#   2. Risk/decision separation — receives risk_signals (computed by
+#      risk_rules.risk_node, which now runs before this node in
+#      graph.py) and is told to treat it as ground truth for
+#      risk_level rather than re-deriving severity purely from vibes.
+#   3. Schema validation — the parsed JSON is checked against
+#      schemas.Recommendation before being returned.
 
 import os
 import json
 
-from langchain_mistralai import ChatMistralAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from pydantic import ValidationError
+
+from schemas import Recommendation
 
 
 # ---------------------------------------------------------
 # LLM
 # ---------------------------------------------------------
 
-recommendation_llm = ChatMistralAI(
+recommendation_llm = ChatGroq(
     model=os.getenv(
-        "MISTRAL_MODEL",
-        "mistral-medium-3-5"
+        "GROQ_MODEL_RECOMMENDATION",
+        "llama-3.3-70b-versatile"
     ),
     temperature=0,
-    api_key=os.getenv("MISTRAL_API_KEY"),
-    # No explicit timeout was ever set here, so there was nothing to
-    # "remove" — it's left on ChatMistralAI's own default rather than
-    # forcing an unbounded wait, since an unverified None here risks a
-    # hard crash at import time if the underlying client doesn't accept
-    # it. This is the actual fix for "Error response 429 ... rate limit
-    # exceeded": a 429 from Mistral is an immediate rejection, not a
-    # slow response, so no timeout setting affects it at all. Raising
-    # max_retries makes langchain retry the call (with backoff) instead
-    # of surfacing the 429 straight to recommendation_node's except
-    # block on the very first hit.
+    api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
+    model_kwargs={"response_format": {"type": "json_object"}},
 )
 
 
@@ -41,7 +50,8 @@ RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template(
 You are the Final Marine Intelligence and Recommendation Agent.
 
 You receive structured data collected by specialist marine
-agents.
+agents, a rule-based risk pre-assessment, and (if this is not the
+first message) a short history of the conversation so far.
 
 Your job is to analyze the available data and provide a
 clear, evidence-based recommendation for the user.
@@ -105,10 +115,28 @@ IMPORTANT RULES:
 - Explain WHY the recommendation was made.
 - Keep the final recommendation understandable.
 - Do not expose internal implementation details.
+- RISK PRE-ASSESSMENT below is computed by fixed, documented
+  thresholds (wind, wave height, cyclone distance), not by you. Set
+  "risk_level" to match its "overall_rule_based_severity" unless it is
+  "insufficient_data", in which case use your own judgment from
+  whatever agent data is available and say explicitly that the
+  automated risk check had insufficient data.
+- If CONVERSATION HISTORY is non-empty, treat this as a continuing
+  conversation: reference earlier findings where relevant instead of
+  repeating a full fresh analysis, and answer the user's actual new
+  question directly.
 - Some agent data below may be abbreviated ("...N more entries
   omitted for brevity...") to keep this prompt a reasonable size —
   treat that as "additional similar data points were collected but
   not shown", not as missing data.
+
+Conversation History:
+
+{conversation_history}
+
+Risk Pre-Assessment (rule-based, authoritative for severity):
+
+{risk_signals}
 
 User Question:
 
@@ -161,27 +189,13 @@ SEVERE
 
 
 # ---------------------------------------------------------
-# PROMPT-SIZE COMPACTION
+# PROMPT-SIZE COMPACTION (unchanged from original)
 # ---------------------------------------------------------
-#
-# Specialist agents like weather/ocean/ecosystem return dense
-# per-grid-point x per-hour time series (see
-# final_agent_output_format.md). Dumping that raw into the prompt
-# regularly exceeded Mistral's input size limit and failed with:
-#   {"type": "invalid_request_prompt_too_long", "code": "3059",
-#    "raw_status_code": 400}
-# which was being swallowed by the generic `except Exception` below
-# and reported as a plain "Recommendation generation failed."
-#
-# _compact_for_llm keeps every agent's data but caps how many entries
-# any list contributes, so the prompt stays bounded no matter how
-# much raw data a specialist agent returns. MAX_PROMPT_CHARS is a
-# belt-and-suspenders hard cap in case compaction still isn't enough
-# (e.g. many agents all required at once).
 
 MAX_LIST_LEN = 6
 MAX_COMPACT_DEPTH = 6
 MAX_PROMPT_CHARS = 24000
+MAX_HISTORY_TURNS_IN_PROMPT = 5
 
 
 def _compact_for_llm(obj, max_list_len=MAX_LIST_LEN, max_depth=MAX_COMPACT_DEPTH, _depth=0):
@@ -218,6 +232,24 @@ def _compact_for_llm(obj, max_list_len=MAX_LIST_LEN, max_depth=MAX_COMPACT_DEPTH
     return obj
 
 
+def _format_history_for_prompt(conversation_history):
+    """Same idea as planner_node._format_history: only question +
+    prior recommendation summary/risk_level, never raw agent_data, so
+    history never dominates the prompt-size budget."""
+    if not conversation_history:
+        return "(no prior turns — this is the first message)"
+
+    recent = conversation_history[-MAX_HISTORY_TURNS_IN_PROMPT:]
+    lines = []
+    for turn in recent:
+        question = turn.get("question", "")
+        rec = turn.get("recommendation") or {}
+        summary = rec.get("summary", "") if isinstance(rec, dict) else ""
+        risk_level = rec.get("risk_level", "") if isinstance(rec, dict) else ""
+        lines.append(f"- User asked: {question!r} -> risk_level={risk_level!r}, summary={summary!r}")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------
 # RECOMMENDATION NODE
 # ---------------------------------------------------------
@@ -226,14 +258,18 @@ def recommendation_node(state):
     """
     Final Recommendation Agent.
 
-    Combines outputs from all executed specialist agents
-    and uses Mistral to generate the final assessment.
+    Combines outputs from all executed specialist agents, the
+    rule-based risk pre-assessment, and any conversation history, and
+    uses the LLM to generate the final assessment.
     """
 
     user_question = state.get(
         "user_question",
         ""
     )
+
+    conversation_history = state.get("conversation_history", [])
+    risk_signals = state.get("risk_signals", {})
 
     # -----------------------------------------------------
     # Collect specialist outputs
@@ -275,13 +311,15 @@ def recommendation_node(state):
             )
 
         # -------------------------------------------------
-        # Call Mistral
+        # Call the LLM
         # -------------------------------------------------
 
         response = recommendation_llm.invoke(
             RECOMMENDATION_PROMPT.format(
                 user_question=user_question,
-                agent_data=agent_data_json
+                agent_data=agent_data_json,
+                conversation_history=_format_history_for_prompt(conversation_history),
+                risk_signals=json.dumps(risk_signals, ensure_ascii=False, indent=2, default=str),
             )
         )
 
@@ -313,6 +351,15 @@ def recommendation_node(state):
         recommendation = json.loads(
             content.strip()
         )
+
+        # -------------------------------------------------
+        # Schema validation
+        # -------------------------------------------------
+
+        try:
+            Recommendation.model_validate(recommendation)
+        except ValidationError as ve:
+            recommendation["schema_warning"] = str(ve)
 
         return {
             "recommendation": recommendation,
