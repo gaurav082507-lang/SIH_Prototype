@@ -78,7 +78,13 @@ import requests
 
 TIDE_API_URL = os.getenv("TIDE_API_URL", "https://orca-backend-tide.onrender.com/tide")
 
-# Render free tier cold-starts. First call after idling can take 30s+.
+# timeout intentionally removed (per request) — this call now waits
+# indefinitely for a response instead of failing after TIDE_TIMEOUT_S.
+# TIDE_TIMEOUT_S / TIDE_RETRIES / TIDE_BACKOFF_S are kept (and the retry
+# loop below still runs) in case a timeout is reintroduced later, but
+# with no timeout set, requests.Timeout can never actually be raised, so
+# every attempt effectively has unlimited time to respond before the
+# retry loop would move on.
 TIDE_TIMEOUT_S = float(os.getenv("TIDE_TIMEOUT_S", "50"))
 TIDE_RETRIES = int(os.getenv("TIDE_RETRIES", "2"))          # attempts after the first
 TIDE_BACKOFF_S = float(os.getenv("TIDE_BACKOFF_S", "2.0"))
@@ -292,7 +298,10 @@ def fetch_tide_raw(
 
     for attempt in range(TIDE_RETRIES + 1):
         try:
-            resp = requests.get(TIDE_API_URL, params=params, timeout=TIDE_TIMEOUT_S)
+            # timeout=None: see the module-level note near TIDE_TIMEOUT_S —
+            # this call now waits indefinitely instead of giving up after
+            # TIDE_TIMEOUT_S seconds.
+            resp = requests.get(TIDE_API_URL, params=params, timeout=None)
         except requests.Timeout as e:
             last_exc = TideError("TIMEOUT",
                                  f"Tide service timed out after {TIDE_TIMEOUT_S}s",
