@@ -1,24 +1,16 @@
 # planner_node.py
 #
-# Planner node using ChatGroq.
-#
-# Responsibilities:
-#   1. Select specialist agents.
-#   2. Detect fish/fishing queries and always include ecosystem.
-#   3. Determine date/activity.
-#   4. Generate deterministic grid points.
-#   5. Parse GPT-OSS output robustly.
-#   6. Validate the final plan locally with Pydantic.
-#
-# Important:
-#   - No Groq response_format is used.
-#   - GPT-OSS reasoning is set to low.
-#   - Reasoning is excluded from the returned content.
-#   - JSON is parsed locally.
+# ORCA Marine Intelligence - Planner Agent
+# - Uses Groq GPT-OSS 120B by default.
+# - Does not use provider-side response_format/json_schema.
+# - Parses JSON locally and also handles JSON wrapped in quotes/fences.
+# - Does not assume every query is about fishing.
+# - Keeps the prompt small for Groq's free-tier TPM limit.
 
+import ast
 import json
 import os
-import traceback
+import re
 from datetime import date as _date
 
 from dotenv import load_dotenv
@@ -32,35 +24,24 @@ from schemas import Plan
 load_dotenv()
 
 
-# =========================================================
+# ============================================================
 # LLM
-# =========================================================
+# ============================================================
 
 planner_llm = ChatGroq(
-    model=os.getenv(
-        "GROQ_MODEL_PLANNER",
-        "openai/gpt-oss-120b",
-    ),
+    model=os.getenv("GROQ_MODEL_PLANNER", "openai/gpt-oss-120b"),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=2,
-
-    # GPT-OSS is a reasoning model.
-    # Keep reasoning low so that enough completion budget
-    # remains for the actual JSON response.
     reasoning_effort="low",
-
-    # Do not return the reasoning in response.content.
     include_reasoning=False,
-
-    # Planner only needs a very small JSON object.
     max_completion_tokens=300,
 )
 
 
-# =========================================================
-# ALLOWED AGENTS
-# =========================================================
+# ============================================================
+# CONSTANTS
+# ============================================================
 
 ALLOWED_AGENTS = {
     "weather",
@@ -72,78 +53,49 @@ ALLOWED_AGENTS = {
     "gis",
 }
 
-
-# =========================================================
-# PROMPT LIMITS
-# =========================================================
-
-# History is intentionally disabled.
-# The planner only needs the current question.
-MAX_HISTORY_TURNS_IN_PROMPT = 0
-MAX_HISTORY_CHARS = 0
-
-# Prevent extremely large user questions from increasing
-# the Groq TPM usage.
 MAX_QUESTION_CHARS = 2000
 
 
-# =========================================================
-# PLANNER PROMPT
-# =========================================================
+# ============================================================
+# PROMPT
+# ============================================================
 
 PLANNER_PROMPT = ChatPromptTemplate.from_template(
     """
-You are the Planner Agent of a Marine Intelligence Platform.
+You are the Planner Agent for a Marine Intelligence Platform.
 
-Select specialist agents needed for the user's marine question.
+Determine whether the user's question is marine-related and select only the
+specialist agents actually needed.
 
 Allowed agents:
-- weather: temperature, rainfall, wind, visibility, atmospheric conditions
-- ocean: waves, swell, sea state, ocean conditions
-- tide: high/low tide and tidal conditions
-- cyclone: cyclones, tropical storms, storm warnings
-- ecosystem: marine ecosystem, biodiversity, marine species, fish-related data
-- pfz: potential fishing zones / where to fish
-- gis: distance to coast, depth, restricted/protected zones, EEZ, nearest port
+- weather: weather, wind, rainfall, visibility, temperature, lightning
+- ocean: waves, swell, sea state, currents, ocean conditions
+- tide: tides, high/low tide, tidal timing
+- cyclone: cyclones, storms, tropical systems, storm warnings
+- ecosystem: marine life, biodiversity, species, ecosystem conditions
+- pfz: potential fishing zones, fishing locations, where/when to fish
+- gis: location, distance, coastline, depth, restricted zones, EEZ, ports
 
 Rules:
-
-- Include every agent whose data is needed.
-
-- FISH / FISHING RULE:
-  If the user's question is about fish, fishing, target species,
-  fish availability, fish abundance, fish distribution, fish habitat,
-  fish suitability, or fishing areas, ALWAYS include "ecosystem".
-
-- FISHING TRIP RULE:
-  For a fishing trip, include:
-  "ecosystem", "pfz", "weather", "ocean", "tide".
-
-- PFZ RULE:
-  If the question asks about PFZ, potential fishing zones,
-  fishing hotspots, best fishing locations, or where to fish,
-  include BOTH "ecosystem" and "pfz".
-
-- General safety at sea -> weather, ocean, tide.
-
-- GIS runs automatically, so it is optional here.
-
-- Reject only non-marine questions.
-
+- Reject ONLY clearly non-marine questions.
+- Do NOT assume the user is fishing unless the question says or strongly
+  implies fishing/PFZ.
+- General sea safety normally needs weather, ocean, and tide.
+- Fishing/PFZ questions normally need pfz, weather, ocean, and tide.
+- Cyclone questions need cyclone plus any supporting weather/ocean agents.
+- Ecosystem questions need ecosystem and supporting marine agents when useful.
+- GIS is executed automatically by the application for every accepted query;
+  it does not need to be selected.
 - Do not invent data.
+- Use today's date unless the user explicitly gives another date.
+- "activity" must describe the user's actual intent. Do not use "fishing"
+  for a non-fishing question.
 
-- Use today's date unless the user specifies another date.
-
-Return ONLY ONE valid JSON object.
-No markdown.
-No explanation.
-No text before or after the JSON.
-
-Use exactly these keys:
+Return ONLY one valid JSON object with EXACTLY these keys:
 rejected, rejection_reason, required_agents, activity, date
 
 Example:
-{{"rejected":false,"rejection_reason":null,"required_agents":["ecosystem","pfz","weather","ocean","tide"],"activity":"fishing","date":"{today}"}}
+{{"rejected":false,"rejection_reason":null,"required_agents":["weather","ocean","tide"],"activity":"sea safety","date":"{today}"}}
 
 User question:
 {user_question}
@@ -154,182 +106,191 @@ Longitude: {longitude}
 )
 
 
-# =========================================================
-# HISTORY
-# =========================================================
+# ============================================================
+# HELPERS
+# ============================================================
 
-def _format_history(conversation_history):
-    """
-    History is intentionally disabled.
-
-    Keeping previous conversation turns out of the planner
-    prevents unnecessary token usage on the Groq free tier.
-    """
-    return "(no prior turns)"
-
-
-# =========================================================
-# JSON EXTRACTION
-# =========================================================
-
-def _parse_planner_json(content):
-    """
-    Robustly parse JSON returned by the planner.
-
-    Handles:
-      - normal JSON
-      - ```json fenced JSON
-      - ``` fenced JSON
-      - small text surrounding the JSON
-      - LangChain content blocks
-      - empty responses
-    """
-
-    # -----------------------------------------------------
-    # Handle LangChain content blocks
-    # -----------------------------------------------------
-
+def _content_to_text(content):
+    """Normalize LangChain message content into plain text."""
     if isinstance(content, list):
         parts = []
 
         for item in content:
             if isinstance(item, dict):
-                text = item.get("text", "")
-
+                text = item.get("text")
                 if text:
                     parts.append(str(text))
             else:
                 parts.append(str(item))
 
-        content = "".join(parts)
+        return "".join(parts).strip()
 
-    content = str(content or "").strip()
+    return str(content or "").strip()
 
-    print(f"[planner] raw response chars={len(content)}")
-    print(f"[planner] raw response={content!r}")
 
-    # -----------------------------------------------------
-    # Empty response
-    # -----------------------------------------------------
+def _extract_json_object(text):
+    """
+    Extract a JSON object from model output.
 
-    if not content:
-        raise json.JSONDecodeError(
-            "Planner returned an empty response",
-            content,
-            0,
-        )
+    Handles:
+      1. normal JSON
+      2. markdown fenced JSON
+      3. Python/JSON string wrappers such as:
+         '{\\n "rejected": false, ... }'
+      4. explanatory text before/after the JSON
+    """
+    text = str(text or "").strip()
 
-    # -----------------------------------------------------
-    # Remove markdown fences
-    # -----------------------------------------------------
+    if not text:
+        raise ValueError("Planner model returned an empty response.")
 
-    if "```json" in content:
-        content = content.split("```json", 1)[1]
+    # Remove common markdown fences.
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text).strip()
 
-        if "```" in content:
-            content = content.split("```", 1)[0]
-
-        content = content.strip()
-
-    elif "```" in content:
-        content = content.replace("```", "").strip()
-
-    # -----------------------------------------------------
-    # First attempt:
-    # response itself is JSON
-    # -----------------------------------------------------
-
+    # First: normal JSON.
     try:
-        return json.loads(content)
+        value = json.loads(text)
+        if isinstance(value, dict):
+            return value
 
+        if isinstance(value, str):
+            text = value.strip()
     except json.JSONDecodeError:
         pass
 
-    # -----------------------------------------------------
-    # Second attempt:
-    # extract the JSON object from surrounding text
-    # -----------------------------------------------------
+    # Second: Python-style quoted string returned by the model.
+    # ast.literal_eval correctly converts literal \\n into newlines.
+    if len(text) >= 2 and text[0] in ("'", '"') and text[-1] == text[0]:
+        try:
+            value = ast.literal_eval(text)
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                text = value.strip()
+        except (ValueError, SyntaxError):
+            pass
 
-    start = content.find("{")
-    end = content.rfind("}")
+        try:
+            value = json.loads(text)
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError:
+            pass
 
-    if start == -1 or end == -1 or end <= start:
-        raise json.JSONDecodeError(
-            "No JSON object found in planner response",
-            content,
-            0,
-        )
+    # Third: locate the first balanced JSON object.
+    starts = [m.start() for m in re.finditer(r"\{", text)]
 
-    json_text = content[start:end + 1]
+    for start in starts:
+        depth = 0
+        in_string = False
+        escaped = False
 
-    return json.loads(json_text)
+        for index in range(start, len(text)):
+            char = text[index]
 
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
 
-# =========================================================
-# PLANNER NODE
-# =========================================================
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
 
-def planner_node(state):
-    """
-    Planner Agent.
+                if depth == 0:
+                    candidate = text[start:index + 1]
 
-    Uses the LLM to:
-      1. Select specialist agents.
-      2. Determine date/activity.
-      3. Generate deterministic grid points.
-      4. Return a schema-validated plan.
-    """
+                    try:
+                        value = json.loads(candidate)
+                        if isinstance(value, dict):
+                            return value
+                    except json.JSONDecodeError:
+                        pass
 
-    user_question = (state.get("user_question") or "").strip()
+                    break
 
-    latitude = state.get("latitude")
-    longitude = state.get("longitude")
-
-    conversation_history = state.get(
-        "conversation_history",
-        [],
+    raise ValueError(
+        "Planner model returned non-JSON content: "
+        f"{text[:1200]!r}"
     )
 
-    # -----------------------------------------------------
-    # Validate question
-    # -----------------------------------------------------
+
+def _normalize_agents(value):
+    if not isinstance(value, list):
+        return []
+
+    result = []
+
+    for agent in value:
+        agent = str(agent).strip().lower()
+
+        if agent in ALLOWED_AGENTS and agent not in result:
+            result.append(agent)
+
+    return result
+
+
+# ============================================================
+# NODE
+# ============================================================
+
+def planner_node(state):
+    """Plan the current marine question and prepare the search grid."""
+
+    user_question = str(state.get("user_question") or "").strip()
+    latitude = state.get("latitude")
+    longitude = state.get("longitude")
 
     if not user_question:
         return {
             "plan": {
                 "rejected": True,
-                "rejection_reason": "No user question provided",
+                "rejection_reason": "No user question provided.",
                 "required_agents": [],
+                "activity": "unknown",
+                "date": _date.today().isoformat(),
+                "grid_points": [],
             }
         }
-
-    # -----------------------------------------------------
-    # Validate coordinates
-    # -----------------------------------------------------
 
     if latitude is None or longitude is None:
         return {
             "plan": {
                 "rejected": True,
-                "rejection_reason": (
-                    "Latitude and longitude are required"
-                ),
+                "rejection_reason": "Latitude and longitude are required.",
                 "required_agents": [],
+                "activity": "unknown",
+                "date": _date.today().isoformat(),
+                "grid_points": [],
             }
         }
 
-    # -----------------------------------------------------
-    # Limit question size
-    # -----------------------------------------------------
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        return {
+            "plan": {
+                "rejected": True,
+                "rejection_reason": "Invalid latitude or longitude.",
+                "required_agents": [],
+                "activity": "unknown",
+                "date": _date.today().isoformat(),
+                "grid_points": [],
+            }
+        }
 
     user_question = user_question[:MAX_QUESTION_CHARS]
 
     try:
-
-        # =================================================
-        # Build prompt
-        # =================================================
-
         prompt_text = PLANNER_PROMPT.format(
             user_question=user_question,
             latitude=latitude,
@@ -338,304 +299,94 @@ def planner_node(state):
         )
 
         print(
-            f"[planner] prompt chars={len(prompt_text)} "
-            f"words={len(prompt_text.split())}"
+            f"[planner] prompt_chars={len(prompt_text)} "
+            f"question_chars={len(user_question)}"
         )
-
-        # =================================================
-        # Call Groq
-        # =================================================
 
         response = planner_llm.invoke(prompt_text)
+        content = _content_to_text(response.content)
 
-        print(
-            f"[planner] response type="
-            f"{type(response.content)}"
+        print(f"[planner] raw_response_chars={len(content)}")
+        print(f"[planner] raw_response={content[:2000]!r}")
+
+        plan = _extract_json_object(content)
+
+        # --------------------------------------------------------
+        # Normalize model-owned fields
+        # --------------------------------------------------------
+
+        plan["rejected"] = bool(plan.get("rejected", False))
+
+        required_agents = _normalize_agents(
+            plan.get("required_agents", [])
         )
-
-        # =================================================
-        # Parse JSON
-        # =================================================
-
-        plan = _parse_planner_json(
-            response.content
-        )
-
-        # -------------------------------------------------
-        # Make sure the model returned an object
-        # -------------------------------------------------
-
-        if not isinstance(plan, dict):
-            raise ValueError(
-                "Planner JSON must be an object"
-            )
-
-        # =================================================
-        # Normalize required_agents
-        # =================================================
-
-        required_agents = plan.get(
-            "required_agents",
-            [],
-        )
-
-        if not isinstance(required_agents, list):
-            required_agents = []
-
-        # Keep only allowed agents.
-        required_agents = [
-            agent
-            for agent in required_agents
-            if isinstance(agent, str)
-            and agent in ALLOWED_AGENTS
-        ]
-
-        # =================================================
-        # IMPORTANT FISH SAFETY NET
-        # =================================================
-        #
-        # The prompt already tells the model to include
-        # ecosystem for fish/fishing questions.
-        #
-        # This application-level rule makes sure the model
-        # cannot accidentally omit ecosystem.
-        #
-        # This is intentionally based on the user's question,
-        # not on model output.
-
-        question_lower = user_question.lower()
-
-        fish_keywords = (
-            "fish",
-            "fishing",
-            "fisheries",
-            "fisherman",
-            "fishermen",
-            "catch",
-            "tuna",
-            "sardine",
-            "mackerel",
-            "anchovy",
-            "pomfret",
-            "hilsa",
-            "kingfish",
-            "seer fish",
-            "shrimp",
-            "prawn",
-            "species",
-            "target species",
-            "where to fish",
-            "fishing area",
-            "fishing spot",
-            "fishing zone",
-        )
-
-        is_fish_query = any(
-            keyword in question_lower
-            for keyword in fish_keywords
-        )
-
-        if is_fish_query:
-            if "ecosystem" not in required_agents:
-                required_agents.append("ecosystem")
-
-        # -------------------------------------------------
-        # PFZ safety net
-        # -------------------------------------------------
-
-        pfz_keywords = (
-            "pfz",
-            "potential fishing zone",
-            "potential fishing zones",
-            "fishing hotspot",
-            "fishing hotspots",
-            "best fishing location",
-            "best fishing locations",
-            "where to fish",
-            "fishing zone",
-            "fishing zones",
-        )
-
-        is_pfz_query = any(
-            keyword in question_lower
-            for keyword in pfz_keywords
-        )
-
-        if is_pfz_query:
-            if "pfz" not in required_agents:
-                required_agents.append("pfz")
-
-            if "ecosystem" not in required_agents:
-                required_agents.append("ecosystem")
-
-        # -------------------------------------------------
-        # Fishing-trip safety net
-        # -------------------------------------------------
-
-        fishing_trip_keywords = (
-            "fishing trip",
-            "go fishing",
-            "going fishing",
-            "plan a fishing",
-            "fishing tomorrow",
-            "fishing today",
-        )
-
-        is_fishing_trip = any(
-            keyword in question_lower
-            for keyword in fishing_trip_keywords
-        )
-
-        if is_fishing_trip:
-            for agent in (
-                "ecosystem",
-                "pfz",
-                "weather",
-                "ocean",
-                "tide",
-            ):
-                if agent not in required_agents:
-                    required_agents.append(agent)
-
         plan["required_agents"] = required_agents
 
-        # =================================================
-        # Application-owned values
-        # =================================================
+        rejection_reason = plan.get("rejection_reason")
+        if plan["rejected"]:
+            plan["rejection_reason"] = (
+                str(rejection_reason).strip()
+                if rejection_reason
+                else "Request is not related to marine intelligence."
+            )
+        else:
+            plan["rejection_reason"] = None
 
+        activity = str(plan.get("activity") or "").strip()
+        plan["activity"] = activity or "marine conditions"
+
+        plan_date = str(plan.get("date") or "").strip()
+        plan["date"] = plan_date or _date.today().isoformat()
+
+        # Application-owned location values.
         plan["latitude"] = latitude
         plan["longitude"] = longitude
 
-        if not plan.get("date"):
-            plan["date"] = _date.today().isoformat()
+        # --------------------------------------------------------
+        # Deterministic grid
+        # --------------------------------------------------------
 
-        if not plan.get("activity"):
-            plan["activity"] = (
-                "fishing"
-                if is_fish_query
-                else "marine_analysis"
-            )
-
-        # =================================================
-        # Ensure rejection value is boolean
-        # =================================================
-
-        if not isinstance(
-            plan.get("rejected"),
-            bool,
-        ):
-            plan["rejected"] = False
-
-        # =================================================
-        # Deterministic search grid
-        # =================================================
-
-        if plan.get("rejected"):
+        if plan["rejected"]:
             plan["grid_points"] = []
-
-        elif not required_agents and conversation_history:
-            plan["grid_points"] = []
-
         else:
-            grid_result = generate_grid.invoke({
-                "center_lat": latitude,
-                "center_lon": longitude,
-                "radius_km": 40,
-                "num_points": 10,
-            })
-
+            grid_result = generate_grid.invoke(
+                {
+                    "center_lat": latitude,
+                    "center_lon": longitude,
+                    "radius_km": 40,
+                    "num_points": 10,
+                }
+            )
             plan["grid_points"] = grid_result
 
-        # =================================================
+        # --------------------------------------------------------
         # Local schema validation
-        # =================================================
+        # --------------------------------------------------------
 
         try:
             Plan.model_validate(plan)
-
-        except ValidationError as ve:
-            # Keep the plan usable but expose schema issues.
-            plan["schema_warning"] = str(ve)
-
-            print(
-                "[planner] schema warning:",
-                str(ve),
-            )
-
-        # =================================================
-        # Debug final plan
-        # =================================================
-
-        print(
-            "[planner] final required_agents=",
-            plan.get("required_agents"),
-        )
-
-        print(
-            "[planner] final activity=",
-            plan.get("activity"),
-        )
-
-        print(
-            "[planner] final date=",
-            plan.get("date"),
-        )
-
-        # =================================================
-        # Return state
-        # =================================================
+        except ValidationError as exc:
+            # Keep the graph running but expose the schema mismatch.
+            plan["schema_warning"] = str(exc)
 
         return {
-            "plan": plan
+            "plan": plan,
+            "status": "PLANNED",
         }
 
-    # =====================================================
-    # JSON ERROR
-    # =====================================================
-
-    except json.JSONDecodeError as e:
-
-        print(
-            "[planner] JSON parsing failed:",
-            repr(e),
-        )
-
-        print(
-            "[planner] user question:",
-            repr(user_question),
-        )
-
-        return {
-            "plan": {
-                "rejected": True,
-                "rejection_reason": (
-                    "Planner returned invalid JSON"
-                ),
-                "required_agents": [],
-                "error": str(e),
-            }
-        }
-
-    # =====================================================
-    # GENERAL ERROR
-    # =====================================================
-
-    except Exception as e:
-
-        print(
-            "[planner] Planner execution failed:",
-            repr(e),
-        )
-
+    except Exception as exc:
+        import traceback
         traceback.print_exc()
 
         return {
             "plan": {
                 "rejected": True,
-                "rejection_reason": (
-                    "Planner execution failed"
-                ),
+                "rejection_reason": "Planner execution failed.",
                 "required_agents": [],
-                "error": repr(e),
-            }
+                "activity": "unknown",
+                "date": _date.today().isoformat(),
+                "grid_points": [],
+                "error": repr(exc),
+            },
+            "status": "FAILED",
         }
