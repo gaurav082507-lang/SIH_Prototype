@@ -178,6 +178,13 @@ def _fetch_weather_batch(coords: List[Tuple[float, float]]):
         "timezone": "auto"
     }
 
+    # NOTE on timeouts: this call goes through openmeteo_requests, whose
+    # session (retry_session above) does not have an explicit numeric
+    # timeout configured here either way — there was never one to
+    # "remove" on this path. retry_session only adds retry/backoff on
+    # top of a plain requests session, whose default is also "wait
+    # indefinitely" unless a timeout is passed per-request, which
+    # openmeteo_requests.Client() does not currently expose here.
     responses = openmeteo.weather_api(WEATHER_URL, params=params)
 
     results = []
@@ -293,6 +300,8 @@ def _fetch_ocean_batch(coords: List[Tuple[float, float]]):
         "timezone": "auto"
     }
 
+    # Same note as _fetch_weather_batch: no explicit timeout was ever
+    # set on this path, so there is nothing to remove here.
     responses = openmeteo.weather_api(OCEAN_URL, params=params)
 
     results = []
@@ -368,6 +377,11 @@ CYCLONE_API_BASE_URL = os.getenv(
 )
 
 DEFAULT_RADIUS_KM = 500
+
+# timeout intentionally removed (per request) — REQUEST_TIMEOUT_SECONDS
+# is kept only so the (now effectively unreachable) requests.Timeout
+# except branch below still has a value to format into its message if
+# a timeout is ever reintroduced.
 REQUEST_TIMEOUT_SECONDS = 15
 
 
@@ -388,7 +402,12 @@ def fetch_cyclone_data(latitude: float, longitude: float, radius_km: int = DEFAU
     params = {"lat": latitude, "lon": longitude, "radius_km": radius_km}
 
     try:
-        response = requests.get(CYCLONE_API_BASE_URL, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+        # timeout=None: this call now waits indefinitely instead of
+        # failing after REQUEST_TIMEOUT_SECONDS. The requests.Timeout
+        # branch below can no longer actually fire — requests only
+        # raises Timeout when a numeric timeout is set — but it is left
+        # in place in case a timeout is reintroduced later.
+        response = requests.get(CYCLONE_API_BASE_URL, params=params, timeout=None)
     except requests.exceptions.Timeout:
         return _cyclone_failure("TIMEOUT", f"Cyclone API did not respond within {REQUEST_TIMEOUT_SECONDS}s")
     except requests.exceptions.ConnectionError as exc:
