@@ -55,6 +55,13 @@ INCOIS PAT publishes tide times in Indian Standard Time. Every datetime this
 module produces is timezone-aware IST, and every emitted string carries the
 offset (e.g. "2026-09-03T15:11:00+05:30"), so no consumer has to guess.
 
+A naive (tzinfo-less) datetime passed in anywhere in this module (e.g. via
+`reference_times`) is always treated as "this clock time, in IST" — it is
+never passed through Python's `.astimezone()`, which would instead
+reinterpret it as local server time and silently convert it. See
+`_coerce_ist()` below; every caller of a naive/aware datetime goes through
+it so behaviour can't diverge between call sites.
+
 Dependencies: requests (stdlib otherwise).
 """
 
@@ -224,6 +231,24 @@ def parse_ist(ts: str) -> Optional[datetime]:
 
 def to_iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat(timespec="seconds") if dt else None
+
+
+def _coerce_ist(dt: datetime) -> datetime:
+    """Normalize any datetime (naive or aware) to aware IST, consistently.
+
+    A naive datetime is treated as "this clock time, already in IST" — it
+    is labelled with `.replace(tzinfo=IST)`, never converted with
+    `.astimezone()` (which would instead reinterpret it as local server
+    time and shift the clock value). An aware datetime in some other zone
+    is properly converted to IST with `.astimezone(IST)`.
+
+    This is the single place that decides how naive datetimes are
+    interpreted, so every caller (timeline construction, the anchor
+    state, etc.) agrees on the same instant for the same input.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=IST)
+    return dt.astimezone(IST)
 
 
 # ---------------------------------------------------------------------------
@@ -546,9 +571,12 @@ def get_tide(
 ) -> Dict[str, Any]:
     """Fetch + normalize + derive. This is what tide_node.py calls.
 
-    `reference_times` are aware datetimes (IST recommended) at which a full
-    tide state is computed — typically the hourly timestamps of the requested
-    day-part.
+    `reference_times` are datetimes (aware or naive) at which a full tide
+    state is computed — typically the hourly timestamps of the requested
+    day-part. Naive datetimes are treated as IST clock times (see
+    `_coerce_ist`); aware datetimes in another zone are converted to IST.
+    This interpretation is applied consistently to every reference time,
+    including the one used to build the anchor state.
 
     Returns a dict with `station`, `events`, `timeline`, `fields`, `warnings`.
     Raises TideError on unrecoverable failure.
@@ -579,14 +607,17 @@ def get_tide(
             "tide times at the requested point may differ noticeably."
         )
 
-    timeline: List[Dict[str, Any]] = []
-    for ref in (reference_times or []):
-        ref_ist = ref.astimezone(IST) if ref.tzinfo else ref.replace(tzinfo=IST)
-        timeline.append(tide_state_at(events, ref_ist))
+    # Normalize every reference time through the same rule (naive -> IST
+    # label, aware -> converted to IST) so the timeline and the anchor
+    # state can never disagree about what instant a given input means.
+    ref_ist_list = [_coerce_ist(ref) for ref in (reference_times or [])]
 
-    # Anchor state: first reference time, else the start of the requested range.
-    anchor = (reference_times[0].astimezone(IST)
-              if reference_times else datetime.fromisoformat(from_date).replace(tzinfo=IST))
+    timeline: List[Dict[str, Any]] = [tide_state_at(events, ref_ist) for ref_ist in ref_ist_list]
+
+    # Anchor state: first reference time (already normalized above), else
+    # the start of the requested range.
+    anchor = (ref_ist_list[0] if ref_ist_list
+              else _coerce_ist(datetime.fromisoformat(from_date)))
     anchor_state = tide_state_at(events, anchor)
     day_stats = daily_range(events, anchor.date().isoformat())
 
