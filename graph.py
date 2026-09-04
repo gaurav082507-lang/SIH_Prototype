@@ -1,7 +1,14 @@
+# graph.py
+#
+# ORCA Marine Intelligence LangGraph pipeline.
+#
+# Planner selects the required specialists.
+# GIS runs for every accepted query.
+# The final recommendation waits for the selected specialist branches.
+
 from langgraph.graph import StateGraph, START, END
 
 from state import MarineState
-
 from planner_node import planner_node
 from weather_node import weather_node
 from ocean_node import ocean_node
@@ -13,15 +20,24 @@ from gis_node import gis_node
 from recommendation_node import recommendation_node
 
 
-# ---------------------------------------------------------
-# ROUTING AFTER PLANNER
-# ---------------------------------------------------------
+# ============================================================
+# ROUTING
+# ============================================================
 
 def route_after_planner(state: MarineState):
-
     plan = state.get("plan", {})
 
-    # If planner rejected the request
+    if isinstance(plan, str):
+        import json
+
+        try:
+            plan = json.loads(plan)
+        except Exception:
+            plan = {}
+
+    if not isinstance(plan, dict):
+        return ["recommendation"]
+
     if plan.get("rejected", False):
         return ["recommendation"]
 
@@ -30,7 +46,15 @@ def route_after_planner(state: MarineState):
     if not isinstance(required_agents, list):
         required_agents = []
 
+    required_agents = {
+        str(agent).strip().lower()
+        for agent in required_agents
+    }
+
     routes = []
+
+    # GIS is the application baseline and runs for every accepted query.
+    routes.append("gis")
 
     if "weather" in required_agents:
         routes.append("weather")
@@ -50,39 +74,16 @@ def route_after_planner(state: MarineState):
     if "pfz" in required_agents:
         routes.append("pfz")
 
-    # GIS (coast distance, restricted/protected zones, maritime
-    # boundary, nearest port, EEZ / fishing-zone jurisdiction) is
-    # safety-relevant baseline context for every accepted query —
-    # geofencing near international boundaries or protected areas
-    # matters regardless of what the user actually asked about — so
-    # it always runs alongside whatever specialist agents the planner
-    # selected, rather than being gated on required_agents like the
-    # other six.
-    routes.append("gis")
-
-    # If nothing else was selected, still generate a response
-    # (routes always has at least "gis" at this point, so this is
-    # now a defensive no-op rather than the usual path — kept in
-    # case "gis" is ever removed from the always-on list above).
-    if not routes:
-        routes.append("recommendation")
-
     return routes
 
 
-# ---------------------------------------------------------
-# BUILD GRAPH
-# ---------------------------------------------------------
+# ============================================================
+# GRAPH
+# ============================================================
 
 builder = StateGraph(MarineState)
 
-
-# --------------------
-# NODES
-# --------------------
-
 builder.add_node("planner", planner_node)
-
 builder.add_node("weather", weather_node)
 builder.add_node("ocean", ocean_node)
 builder.add_node("tide", tide_node)
@@ -90,20 +91,9 @@ builder.add_node("cyclone", cyclone_node)
 builder.add_node("ecosystem", ecosystem_node)
 builder.add_node("pfz", pfz_node)
 builder.add_node("gis", gis_node)
-
 builder.add_node("recommendation", recommendation_node)
 
-
-# --------------------
-# START → PLANNER
-# --------------------
-
 builder.add_edge(START, "planner")
-
-
-# ---------------------------------------------------------
-# PLANNER → SPECIALIST AGENTS
-# ---------------------------------------------------------
 
 builder.add_conditional_edges(
     "planner",
@@ -117,14 +107,12 @@ builder.add_conditional_edges(
         "pfz": "pfz",
         "gis": "gis",
         "recommendation": "recommendation",
-    }
+    },
 )
 
-
-# ---------------------------------------------------------
-# SPECIALIST AGENTS → RECOMMENDATION
-# ---------------------------------------------------------
-
+# Every specialist branch feeds the final synthesis node.
+# LangGraph synchronizes multiple incoming edges before executing
+# the downstream node.
 builder.add_edge("weather", "recommendation")
 builder.add_edge("ocean", "recommendation")
 builder.add_edge("tide", "recommendation")
@@ -133,16 +121,6 @@ builder.add_edge("ecosystem", "recommendation")
 builder.add_edge("pfz", "recommendation")
 builder.add_edge("gis", "recommendation")
 
-
-# ---------------------------------------------------------
-# RECOMMENDATION → END
-# ---------------------------------------------------------
-
 builder.add_edge("recommendation", END)
-
-
-# ---------------------------------------------------------
-# COMPILE
-# ---------------------------------------------------------
 
 marine_graph = builder.compile()
