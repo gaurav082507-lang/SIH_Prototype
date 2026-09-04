@@ -17,7 +17,18 @@ recommendation_llm = ChatMistralAI(
         "mistral-medium-3-5"
     ),
     temperature=0,
-    api_key=os.getenv("MISTRAL_API_KEY")
+    api_key=os.getenv("MISTRAL_API_KEY"),
+    # No explicit timeout was ever set here, so there was nothing to
+    # "remove" — it's left on ChatMistralAI's own default rather than
+    # forcing an unbounded wait, since an unverified None here risks a
+    # hard crash at import time if the underlying client doesn't accept
+    # it. This is the actual fix for "Error response 429 ... rate limit
+    # exceeded": a 429 from Mistral is an immediate rejection, not a
+    # slow response, so no timeout setting affects it at all. Raising
+    # max_retries makes langchain retry the call (with backoff) instead
+    # of surfacing the 429 straight to recommendation_node's except
+    # block on the very first hit.
+    max_retries=6,
 )
 
 
