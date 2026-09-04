@@ -1,19 +1,3 @@
-# recommendation_node.py
-#
-# Gemini-based Final Marine Intelligence Recommendation Agent.
-#
-# Responsibilities:
-# - Combine all specialist agent outputs.
-# - Interpret null values correctly.
-# - Treat cyclone=null as "no cyclone threat indicated".
-# - Display requested factual values when the user asks for them.
-# - Generate the final recommendation.
-# - Robustly parse Gemini JSON responses.
-# - Preserve complete specialist data in agent_findings.
-#
-# Gemini is used instead of Groq.
-# No Groq 8K/token-budget logic is used.
-
 import json
 import os
 import re
@@ -25,12 +9,12 @@ from pydantic import ValidationError
 from schemas import Recommendation
 
 
-print("🔥 GEMINI RECOMMENDATION NODE LOADED")
+print("🔥 RECOMMENDATION NODE LOADED")
 print("FILE:", __file__)
 
 
 # =========================================================
-# GEMINI LLM
+# GEMINI
 # =========================================================
 
 recommendation_llm = ChatGoogleGenerativeAI(
@@ -45,128 +29,66 @@ recommendation_llm = ChatGoogleGenerativeAI(
 
 
 # =========================================================
-# RECOMMENDATION PROMPT
+# PROMPT
 # =========================================================
 
-RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template(
-    """
+RECOMMENDATION_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
 You are the Final Marine Intelligence and Recommendation Agent.
 
 Answer the user's current question using ONLY the supplied marine agent data
 and rule-based risk assessment.
 
-=========================================================
-IMPORTANT DATA INTERPRETATION
-=========================================================
-
+DATA INTERPRETATION:
 - NULL values are VALID.
-- NULL does NOT automatically mean insufficient data.
-- A null field means that particular field has no usable finding.
-- Ignore individual null fields and continue using all other available data.
-- NEVER say "insufficient data" merely because one or more fields are null.
-- NEVER invent a value for a null field.
-- Do not treat null as an error.
+- A null field does NOT automatically mean insufficient data.
+- Ignore individual null fields and continue using all other available evidence.
+- Never invent a value for a null field.
+- Partial agent data is acceptable.
+- Do not increase the risk level merely because some fields are null.
 
-=========================================================
-TOTAL NO-DATA RULE
-=========================================================
+NO-DATA RULE:
+- Only say that marine data could not be retrieved when ALL seven agent
+  outputs are null, missing, or empty:
+  weather, ocean, tide, cyclone, ecosystem, pfz, gis.
+- If even ONE agent contains meaningful data, perform a normal assessment.
+- Never describe partial data as insufficient data.
+- Never assume that null means the location is invalid.
 
-Apply this rule ONLY when ALL marine agents have no usable information.
+CYCLONE RULE:
+- If cyclone is null, interpret it as:
+  "No cyclone threat is indicated by the available cyclone assessment."
+- Do NOT say:
+  "insufficient cyclone data"
+  "cyclone data unavailable"
+  "unable to assess cyclone conditions"
+  simply because cyclone is null.
+- Do not invent cyclone information.
 
-The agents are:
+OTHER NULL VALUES:
+- weather = null → ignore that weather finding.
+- ocean = null → ignore that ocean finding.
+- tide = null → ignore that tide finding.
+- ecosystem = null → ignore that ecosystem finding.
+- pfz = null → ignore that PFZ finding.
+- gis = null → ignore that GIS finding.
 
-weather
-ocean
-tide
-cyclone
-ecosystem
-pfz
-gis
-
-If EVERY agent is null, missing, empty, or contains no meaningful finding,
-then and ONLY then return:
-
-{
-  "summary": "Marine data could not be retrieved for this location right now.",
-  "risk_level": "LOW",
-  "recommendation": "Try again shortly, or verify the coordinates and retry.",
-  "key_findings": [],
-  "safety_advice": []
-}
-
-IMPORTANT:
-
-- Do NOT call partial data "insufficient data".
-- Do NOT say the location is invalid.
-- Do NOT assume the location is non-coastal.
-- Coastal validation has already been performed earlier in the pipeline.
-- If even ONE agent contains meaningful information, perform a normal
-  marine assessment.
-
-=========================================================
-CYCLONE NULL RULE
-=========================================================
-
-If cyclone data is null:
-
-Interpret it as:
-
-"No cyclone threat is indicated by the available cyclone assessment."
-
-Do NOT say:
-
-- "insufficient cyclone data"
-- "cyclone data unavailable"
-- "unable to assess cyclone conditions"
-
-Do NOT invent cyclone information.
-
-Cyclone null does NOT mean the entire marine assessment has insufficient data.
-
-=========================================================
-OTHER NULL VALUES
-=========================================================
-
-weather = null
-→ Ignore that weather finding and use other available evidence.
-
-ocean = null
-→ Ignore that ocean finding and use other available evidence.
-
-tide = null
-→ Ignore that tide finding and use other available evidence.
-
-cyclone = null
-→ No cyclone threat is indicated by the available cyclone assessment.
-
-ecosystem = null
-→ Ignore that ecosystem finding and use other available evidence.
-
-pfz = null
-→ Ignore that PFZ finding and use other available evidence.
-
-gis = null
-→ Ignore that GIS finding and use other available evidence.
-
-=========================================================
-USER-REQUESTED VALUE RULE
-=========================================================
-
+VALUE-DISPLAY RULE:
 If the user explicitly asks for values, measurements, coordinates, times,
-conditions, distances, or other factual information, DISPLAY the actual
-values available in the supplied agent data.
+conditions, or factual data, display the actual requested values from the
+supplied marine agent data whenever those values exist.
 
 Examples:
-
 - wind speed
-- wind gust
+- wind gusts
 - temperature
 - visibility
 - precipitation probability
-- precipitation
 - wave height
 - wave period
-- wave direction
 - sea-surface temperature
 - tide height
 - tide time
@@ -177,260 +99,442 @@ Examples:
 - PFZ latitude
 - PFZ longitude
 - distance from shore
-- nearest port distance
-- GIS information
-- restricted-zone information
+- port distance
+- GIS restricted-zone information
 - any other numerical or factual value supplied by an agent
 
-Rules:
+Rules for requested values:
+- If the requested value exists, display the ACTUAL value.
+- Do not replace an available value with a vague statement.
+- Never invent missing values.
+- If one requested value is null but others are available, display the
+  available values and continue the assessment normally.
+- If a requested value is null, omit that value.
+- Preserve units supplied by the agent.
+- Do not invent units.
+- Keep the answer concise.
 
-1. If the requested value exists, display the ACTUAL value.
-
-2. Do NOT replace an available value with vague language.
-
-Bad:
-"Wind conditions are moderate."
-
-Good:
-"Wind speed is 5.2 m/s with gusts up to 12 m/s."
-
-3. NEVER invent values.
-
-4. If a specifically requested value is null, omit that value.
-
-5. If one requested value is available and another is null, display the
-   available value and continue the assessment.
-
-6. Preserve the units supplied by the agent.
-
-7. If no unit is supplied, do not invent a unit.
-
-8. Keep the answer concise.
-
-=========================================================
-GENERAL ASSESSMENT RULES
-=========================================================
-
-- Do not invent data.
-- Use all meaningful data that is actually supplied.
-- Partial agent data is acceptable.
+SAFETY:
 - Prioritize safety.
 - Explain the main reasons for the recommendation.
-- If dangerous conditions are present, clearly warn the user.
-- Do not increase risk merely because some fields are null.
-- risk_level MUST match overall_rule_based_severity when it is not
-  "insufficient_data".
-- If overall_rule_based_severity is "insufficient_data", determine the
-  best-supported risk level from the actual available marine evidence.
-- Only mention insufficient data when essentially NO meaningful marine
-  intelligence is available.
-- Partial agent data is NOT a failure.
-- Do not describe null cyclone data as insufficient data.
+- Clearly warn the user when dangerous conditions are present.
+- Use the rule-based severity whenever it provides a usable risk level.
+- If the rule-based severity says insufficient_data but meaningful agent data
+  exists, determine the best supported risk level from the available data.
 
-=========================================================
-USER QUESTION
-=========================================================
+OUTPUT:
+Return ONLY ONE NORMAL JSON OBJECT.
 
+Do not use markdown.
+Do not use code fences.
+Do not return a JSON-encoded string.
+Do not put the JSON inside quotes.
+Do not add explanations before or after the JSON.
+
+The JSON must contain these fields:
+summary
+risk_level
+recommendation
+key_findings
+safety_advice
+
+summary:
+- One sentence only.
+
+risk_level:
+- Must be exactly one of:
+  LOW
+  MODERATE
+  HIGH
+  SEVERE
+
+recommendation:
+- One sentence only.
+- It must be actionable.
+
+key_findings:
+- Maximum 2 items.
+- Use this field to display explicitly requested factual values when appropriate.
+
+safety_advice:
+- Maximum 2 items.
+
+Do NOT include agent_findings in the JSON returned by the model.
+
+NO-DATA RESPONSE:
+If and ONLY if every agent has no meaningful data, return:
+
+summary: Marine data could not be retrieved for this location right now.
+risk_level: LOW
+recommendation: Try again shortly, or verify the coordinates and retry.
+key_findings: []
+safety_advice: []
+
+Remember:
+- One null field is NOT insufficient data.
+- cyclone null means no cyclone threat is indicated by the available
+  cyclone assessment.
+- Partial agent data is valid.
+- Use actual requested values whenever they are present.
+""",
+        ),
+        (
+            "human",
+            """
+USER QUESTION:
 {user_question}
 
-=========================================================
-RULE-BASED RISK
-=========================================================
-
+RULE-BASED RISK:
 {risk_signals}
 
-=========================================================
-MARINE AGENT DATA
-=========================================================
-
+MARINE AGENT DATA:
 {agent_data}
 
-=========================================================
-OUTPUT REQUIREMENTS
-=========================================================
-
-Return ONLY one valid JSON object.
-
-Do NOT:
-
-- use markdown
-- use code fences
-- return a JSON-encoded string
-- return explanatory text before or after JSON
-- include agent_findings in the generated JSON
-
-The JSON must contain exactly these main fields:
-
-{
-  "summary": "One short overall assessment",
-  "risk_level": "LOW",
-  "recommendation": "One clear recommendation",
-  "key_findings": ["finding 1", "finding 2"],
-  "safety_advice": ["advice 1", "advice 2"]
-}
-
-Rules:
-
-- summary = one sentence
-- recommendation = one sentence
-- maximum 2 key_findings
-- maximum 2 safety_advice items
-- risk_level must be exactly one of:
-
-LOW
-MODERATE
-HIGH
-SEVERE
-
-IMPORTANT:
-
-If the user explicitly requested factual values, include those actual values
-inside summary and/or key_findings.
-
-Do not mention null values unless directly relevant.
-
-Do not say "insufficient data" because one agent is null.
-
-Do not describe partial agent data as a failure.
-
-=========================================================
-FINAL CHECK BEFORE RESPONDING
-=========================================================
-
-Before returning the JSON:
-
-1. Confirm that the response is a normal JSON object.
-2. Confirm that risk_level is LOW, MODERATE, HIGH, or SEVERE.
-3. Confirm that no invented values are present.
-4. Confirm that requested factual values are included when available.
-5. Confirm that cyclone=null is NOT described as insufficient data.
-6. Confirm that partial data is NOT described as a retrieval failure.
-7. Return ONLY the JSON object.
-"""
+Return the final JSON object now.
+""",
+        ),
+    ]
 )
 
 
 # =========================================================
-# HELPERS
+# LIMITS
+# =========================================================
+
+MAX_LIST_LEN = 5
+MAX_COMPACT_DEPTH = 5
+
+MAX_AGENT_DATA_CHARS = 30000
+MAX_RISK_CHARS = 5000
+MAX_QUESTION_CHARS = 3000
+
+
+# =========================================================
+# DATA COMPACTION
+# =========================================================
+
+def _compact_for_llm(
+    obj,
+    max_list_len=MAX_LIST_LEN,
+    max_depth=MAX_COMPACT_DEPTH,
+    _depth=0,
+):
+    """
+    Reduce very large nested agent responses while preserving
+    useful marine information.
+    """
+
+    if _depth >= max_depth:
+        if isinstance(obj, (dict, list)):
+            return str(obj)
+        return obj
+
+    if isinstance(obj, dict):
+        return {
+            key: _compact_for_llm(
+                value,
+                max_list_len,
+                max_depth,
+                _depth + 1,
+            )
+            for key, value in obj.items()
+        }
+
+    if isinstance(obj, list):
+
+        if len(obj) > max_list_len:
+
+            kept = obj[:max_list_len]
+
+            compacted = [
+                _compact_for_llm(
+                    item,
+                    max_list_len,
+                    max_depth,
+                    _depth + 1,
+                )
+                for item in kept
+            ]
+
+            compacted.append(
+                f"...{len(obj) - len(kept)} more entries omitted..."
+            )
+
+            return compacted
+
+        return [
+            _compact_for_llm(
+                item,
+                max_list_len,
+                max_depth,
+                _depth + 1,
+            )
+            for item in obj
+        ]
+
+    return obj
+
+
+# =========================================================
+# SAFE JSON SERIALIZATION
+# =========================================================
+
+def _safe_json_text(obj, max_chars):
+    """
+    Always returns valid JSON.
+
+    Never cuts JSON in the middle.
+    """
+
+    text = json.dumps(
+        obj,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        default=str,
+    )
+
+    if len(text) <= max_chars:
+        return text
+
+    if isinstance(obj, dict):
+
+        reduced = {}
+
+        for key, value in obj.items():
+
+            candidate = dict(reduced)
+            candidate[key] = value
+
+            candidate_text = json.dumps(
+                candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                default=str,
+            )
+
+            if len(candidate_text) <= max_chars:
+                reduced[key] = value
+
+        reduced["_truncated"] = True
+
+        return json.dumps(
+            reduced,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        )
+
+    return json.dumps(
+        {
+            "_truncated": True,
+            "message": "Data shortened for recommendation processing.",
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+# =========================================================
+# MODEL RESPONSE CLEANING
 # =========================================================
 
 def _clean_model_content(content):
     """
-    Convert Gemini response content into plain text.
-
-    Handles:
-    - normal strings
-    - Gemini/LangChain content lists
-    - accidental markdown code fences
+    Convert Gemini content into plain text.
     """
 
+    if content is None:
+        return ""
+
+    # Gemini/LangChain can sometimes return a list of content blocks.
     if isinstance(content, list):
+
         parts = []
 
         for item in content:
+
             if isinstance(item, dict):
+
                 text = item.get("text")
-                if text:
+
+                if text is not None:
                     parts.append(str(text))
+
             else:
                 parts.append(str(item))
 
         content = "".join(parts)
 
-    if content is None:
-        return ""
+    # Handle dictionary content.
+    if isinstance(content, dict):
 
-    content = str(content).strip()
+        if "text" in content:
+            content = content["text"]
 
-    # Remove markdown fences if Gemini adds them.
-    if content.startswith("```json"):
-        content = content[7:].strip()
-    elif content.startswith("```"):
-        content = content[3:].strip()
+        else:
+            content = json.dumps(
+                content,
+                ensure_ascii=False,
+            )
 
-    if content.endswith("```"):
-        content = content[:-3].strip()
-
-    return content.strip()
+    return str(content).strip()
 
 
-def _try_json_load(content):
+def _strip_code_fences(text):
     """
-    Try several safe ways to parse Gemini's response.
+    Remove accidental markdown fences.
     """
 
-    if not content:
-        return None
+    text = text.strip()
 
-    candidates = [content]
-
-    # Sometimes a model returns:
-    #
-    # {\n "summary": "..."\n}
-    #
-    # as literal escaped characters.
-    normalized = (
-        content
-        .replace("\\r\\n", "\n")
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
+    text = re.sub(
+        r"^\s*```(?:json)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
     )
 
-    if normalized != content:
-        candidates.append(normalized)
+    text = re.sub(
+        r"\s*```\s*$",
+        "",
+        text,
+    )
 
-    for candidate in candidates:
+    return text.strip()
+
+
+# =========================================================
+# ROBUST JSON PARSER
+# =========================================================
+
+def _try_parse_json(value):
+    """
+    Handles:
+
+    1. Normal JSON
+    2. JSON wrapped in quotes
+    3. JSON containing literal \\n
+    4. Markdown code fences
+    5. JSON surrounded by other text
+    """
+
+    if isinstance(value, dict):
+        return value
+
+    if not isinstance(value, str):
+        return None
+
+    candidate = _strip_code_fences(value)
+
+    # -----------------------------------------------------
+    # 1. Normal JSON
+    # -----------------------------------------------------
+
+    try:
+
+        parsed = json.loads(candidate)
+
+        if isinstance(parsed, dict):
+            return parsed
+
+        # Gemini sometimes returns:
+        #
+        # "{\n \"summary\": \"...\"}"
+        #
+        # In this case the first json.loads() produces a string.
+
+        if isinstance(parsed, str):
+
+            inner = parsed.strip()
+
+            try:
+
+                inner_parsed = json.loads(inner)
+
+                if isinstance(inner_parsed, dict):
+                    return inner_parsed
+
+            except (
+                json.JSONDecodeError,
+                TypeError,
+            ):
+                pass
+
+    except (
+        json.JSONDecodeError,
+        TypeError,
+    ):
+        pass
+
+    # -----------------------------------------------------
+    # 2. Literal escaped newlines
+    # -----------------------------------------------------
+
+    normalized = candidate
+
+    normalized = normalized.replace(
+        "\\r\\n",
+        "\n",
+    )
+
+    normalized = normalized.replace(
+        "\\n",
+        "\n",
+    )
+
+    normalized = normalized.replace(
+        "\\r",
+        "\r",
+    )
+
+    normalized = normalized.replace(
+        "\\t",
+        "\t",
+    )
+
+    if normalized != candidate:
+
         try:
-            parsed = json.loads(candidate)
 
-            # Handle a JSON string containing another JSON object.
-            if isinstance(parsed, str):
-                try:
-                    parsed = json.loads(parsed)
-                except json.JSONDecodeError:
-                    pass
+            parsed = json.loads(normalized)
 
             if isinstance(parsed, dict):
                 return parsed
 
-        except (json.JSONDecodeError, TypeError):
-            continue
+            if isinstance(parsed, str):
 
-    return None
+                try:
 
+                    inner = json.loads(parsed)
 
-def _extract_json_object(content):
-    """
-    Extract the first balanced JSON object if Gemini adds
-    surrounding text around the JSON.
-    """
+                    if isinstance(inner, dict):
+                        return inner
 
-    if not content:
-        return None
+                except (
+                    json.JSONDecodeError,
+                    TypeError,
+                ):
+                    pass
 
-    # First try exact parsing.
-    parsed = _try_json_load(content)
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            pass
 
-    if parsed is not None:
-        return parsed
+    # -----------------------------------------------------
+    # 3. Extract balanced JSON object
+    # -----------------------------------------------------
 
-    normalized = (
-        content
-        .replace("\\r\\n", "\n")
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-    )
+    for source in (
+        candidate,
+        normalized,
+    ):
 
-    candidates = [content]
-
-    if normalized != content:
-        candidates.append(normalized)
-
-    for candidate in candidates:
-
-        for match in re.finditer(r"\{", candidate):
+        for match in re.finditer(
+            r"\{",
+            source,
+        ):
 
             start = match.start()
 
@@ -438,9 +542,12 @@ def _extract_json_object(content):
             in_string = False
             escaped = False
 
-            for index in range(start, len(candidate)):
+            for index in range(
+                start,
+                len(source),
+            ):
 
-                char = candidate[index]
+                char = source[index]
 
                 if in_string:
 
@@ -462,23 +569,31 @@ def _extract_json_object(content):
                     depth += 1
 
                 elif char == "}":
+
                     depth -= 1
 
                     if depth == 0:
 
-                        possible_json = candidate[
+                        json_text = source[
                             start:index + 1
                         ]
 
                         try:
+
                             parsed = json.loads(
-                                possible_json
+                                json_text
                             )
 
-                            if isinstance(parsed, dict):
+                            if isinstance(
+                                parsed,
+                                dict,
+                            ):
                                 return parsed
 
-                        except json.JSONDecodeError:
+                        except (
+                            json.JSONDecodeError,
+                            TypeError,
+                        ):
                             pass
 
                         break
@@ -486,33 +601,144 @@ def _extract_json_object(content):
     return None
 
 
+# =========================================================
+# MEANINGFUL DATA CHECK
+# =========================================================
+
+def _has_meaningful_value(value):
+
+    if value is None:
+        return False
+
+    if isinstance(value, str):
+        return bool(value.strip())
+
+    if isinstance(value, dict):
+        return bool(value)
+
+    if isinstance(value, list):
+        return bool(value)
+
+    return True
+
+
 def _has_meaningful_data(agent_data):
-    """
-    Determine whether at least one marine agent has usable data.
 
-    A single non-null/non-empty agent is enough to perform
-    a normal assessment.
-    """
+    return any(
+        _has_meaningful_value(value)
+        for value in agent_data.values()
+    )
 
-    for value in agent_data.values():
 
-        if value is None:
-            continue
+# =========================================================
+# NORMALIZE RECOMMENDATION
+# =========================================================
 
-        if value == "":
-            continue
+def _normalize_recommendation(
+    recommendation,
+    agent_data,
+):
 
-        if value == {}:
-            continue
+    if not isinstance(
+        recommendation,
+        dict,
+    ):
+        recommendation = {}
 
-        if value == []:
-            continue
+    recommendation.setdefault(
+        "summary",
+        "Marine assessment completed.",
+    )
 
-        # A non-empty dictionary/list/string is meaningful enough
-        # to allow the recommendation agent to assess it.
-        return True
+    recommendation.setdefault(
+        "risk_level",
+        "MODERATE",
+    )
 
-    return False
+    recommendation.setdefault(
+        "recommendation",
+        "Review the available marine conditions before proceeding.",
+    )
+
+    recommendation.setdefault(
+        "key_findings",
+        [],
+    )
+
+    recommendation.setdefault(
+        "safety_advice",
+        [],
+    )
+
+    # -----------------------------------------------------
+    # Risk
+    # -----------------------------------------------------
+
+    risk_level = str(
+        recommendation.get(
+            "risk_level",
+            "MODERATE",
+        )
+    ).upper().strip()
+
+    if risk_level not in {
+        "LOW",
+        "MODERATE",
+        "HIGH",
+        "SEVERE",
+    }:
+
+        risk_level = "MODERATE"
+
+    recommendation["risk_level"] = risk_level
+
+    # -----------------------------------------------------
+    # Findings
+    # -----------------------------------------------------
+
+    if not isinstance(
+        recommendation["key_findings"],
+        list,
+    ):
+
+        recommendation["key_findings"] = [
+            str(
+                recommendation["key_findings"]
+            )
+        ]
+
+    if not isinstance(
+        recommendation["safety_advice"],
+        list,
+    ):
+
+        recommendation["safety_advice"] = [
+            str(
+                recommendation["safety_advice"]
+            )
+        ]
+
+    recommendation["key_findings"] = [
+        str(item)
+        for item in recommendation[
+            "key_findings"
+        ][:2]
+    ]
+
+    recommendation["safety_advice"] = [
+        str(item)
+        for item in recommendation[
+            "safety_advice"
+        ][:2]
+    ]
+
+    # -----------------------------------------------------
+    # Preserve complete agent data for UI
+    # -----------------------------------------------------
+
+    recommendation["agent_findings"] = agent_data
+
+    return recommendation
 
 
 # =========================================================
@@ -520,127 +746,163 @@ def _has_meaningful_data(agent_data):
 # =========================================================
 
 def recommendation_node(state):
-    """
-    Final Marine Intelligence Recommendation Agent.
 
-    Combines:
-    - Weather
-    - Ocean
-    - Tide
-    - Cyclone
-    - Ecosystem
-    - PFZ
-    - GIS
-    - Rule-based risk
-
-    Complete specialist data is preserved in agent_findings.
-    """
+    print("\n" + "=" * 70)
+    print("🚢 RECOMMENDATION AGENT STARTED")
+    print("=" * 70)
 
     user_question = str(
-        state.get("user_question", "")
+        state.get(
+            "user_question",
+            "",
+        )
     ).strip()
 
-    risk_signals = state.get("risk_signals") or {}
+    user_question = user_question[
+        :MAX_QUESTION_CHARS
+    ]
+
+    risk_signals = (
+        state.get("risk_signals")
+        or {}
+    )
 
     # -----------------------------------------------------
-    # Collect ALL specialist outputs
+    # Collect all specialist outputs
     # -----------------------------------------------------
 
     agent_data = {
-        "weather": state.get("weather_data"),
-        "ocean": state.get("ocean_data"),
-        "tide": state.get("tide_data"),
-        "cyclone": state.get("cyclone_data"),
-        "ecosystem": state.get("ecosystem_data"),
-        "pfz": state.get("pfz_data"),
-        "gis": state.get("gis_data"),
+
+        "weather": state.get(
+            "weather_data"
+        ),
+
+        "ocean": state.get(
+            "ocean_data"
+        ),
+
+        "tide": state.get(
+            "tide_data"
+        ),
+
+        "cyclone": state.get(
+            "cyclone_data"
+        ),
+
+        "ecosystem": state.get(
+            "ecosystem_data"
+        ),
+
+        "pfz": state.get(
+            "pfz_data"
+        ),
+
+        "gis": state.get(
+            "gis_data"
+        ),
     }
 
     # -----------------------------------------------------
-    # Debug information
+    # Debug
     # -----------------------------------------------------
 
     print(
         "[recommendation_node] agent_data_presence="
         + json.dumps(
             {
-                key: value is not None
-                for key, value in agent_data.items()
+                key: _has_meaningful_value(
+                    value
+                )
+                for key, value
+                in agent_data.items()
             }
         )
     )
 
     print(
-        "[recommendation_node] meaningful_data="
-        f"{_has_meaningful_data(agent_data)}"
+        "[recommendation_node] meaningful_agent_data="
+        + str(
+            _has_meaningful_data(
+                agent_data
+            )
+        )
     )
 
-    plan_debug = state.get("plan")
-
-    if isinstance(plan_debug, dict):
-
-        print(
-            "[recommendation_node] plan_rejected="
-            f"{plan_debug.get('rejected')} "
-            f"required_agents="
-            f"{plan_debug.get('required_agents')}"
-        )
+    # -----------------------------------------------------
+    # Prepare prompt
+    # -----------------------------------------------------
 
     try:
 
-        # -------------------------------------------------
-        # Convert data directly to JSON for Gemini
-        # -------------------------------------------------
-
-        agent_data_json = json.dumps(
-            agent_data,
-            ensure_ascii=False,
-            indent=2,
-            default=str,
+        compact_agent_data = (
+            _compact_for_llm(
+                agent_data
+            )
         )
 
-        risk_json = json.dumps(
+        agent_data_json = (
+            _safe_json_text(
+                compact_agent_data,
+                MAX_AGENT_DATA_CHARS,
+            )
+        )
+
+        risk_json = _safe_json_text(
             risk_signals,
-            ensure_ascii=False,
-            indent=2,
-            default=str,
+            MAX_RISK_CHARS,
         )
 
-        # -------------------------------------------------
-        # Build prompt
-        # -------------------------------------------------
+        # IMPORTANT:
+        # Use format_messages() here.
+        # The JSON example is NOT embedded inside the template,
+        # so the old "\n summary" KeyError problem cannot occur.
 
-        prompt_text = RECOMMENDATION_PROMPT.format(
-            user_question=user_question,
-            agent_data=agent_data_json,
-            risk_signals=risk_json,
+        messages = (
+            RECOMMENDATION_PROMPT.format_messages(
+                user_question=user_question,
+                risk_signals=risk_json,
+                agent_data=agent_data_json,
+            )
+        )
+
+        prompt_length = sum(
+            len(str(message.content))
+            for message in messages
         )
 
         print(
-            "[recommendation_node] "
-            f"prompt_chars={len(prompt_text)}"
+            "[recommendation_node] prompt_chars="
+            + str(prompt_length)
         )
 
         # -------------------------------------------------
         # Gemini call
         # -------------------------------------------------
 
-        response = recommendation_llm.invoke(
-            prompt_text
+        response = (
+            recommendation_llm.invoke(
+                messages
+            )
         )
 
         content = _clean_model_content(
-            getattr(response, "content", "")
+            getattr(
+                response,
+                "content",
+                "",
+            )
         )
 
         print(
             "[recommendation_node] "
-            f"raw_response_chars={len(content)}"
+            "raw_response_chars="
+            + str(len(content))
         )
 
         print(
             "[recommendation_node] "
-            f"raw_response={repr(content[:5000])}"
+            "raw_response="
+            + repr(content[:5000])
         )
 
         # -------------------------------------------------
@@ -650,107 +912,39 @@ def recommendation_node(state):
         if not content:
 
             raise ValueError(
-                "Gemini recommendation model returned "
-                "an empty response."
+                "Recommendation model returned an empty response."
             )
 
         # -------------------------------------------------
         # Parse Gemini JSON
         # -------------------------------------------------
 
-        recommendation = _extract_json_object(
-            content
+        recommendation = (
+            _try_parse_json(
+                content
+            )
         )
 
         if recommendation is None:
 
             raise ValueError(
-                "Gemini recommendation model returned "
+                "Recommendation model returned "
                 "non-JSON content: "
-                f"{content[:2000]!r}"
+                + repr(
+                    content[:1500]
+                )
             )
 
         # -------------------------------------------------
-        # Required fields
+        # Normalize
         # -------------------------------------------------
 
-        recommendation.setdefault(
-            "summary",
-            "Marine assessment completed.",
-        )
-
-        recommendation.setdefault(
-            "risk_level",
-            "MODERATE",
-        )
-
-        recommendation.setdefault(
-            "recommendation",
-            "Review the available marine data before proceeding.",
-        )
-
-        recommendation.setdefault(
-            "key_findings",
-            [],
-        )
-
-        recommendation.setdefault(
-            "safety_advice",
-            [],
-        )
-
-        # -------------------------------------------------
-        # Normalize risk level
-        # -------------------------------------------------
-
-        risk_level = str(
-            recommendation.get(
-                "risk_level",
-                "MODERATE",
+        recommendation = (
+            _normalize_recommendation(
+                recommendation,
+                agent_data,
             )
-        ).upper().strip()
-
-        if risk_level not in {
-            "LOW",
-            "MODERATE",
-            "HIGH",
-            "SEVERE",
-        }:
-
-            risk_level = "MODERATE"
-
-        recommendation["risk_level"] = risk_level
-
-        # -------------------------------------------------
-        # Normalize arrays
-        # -------------------------------------------------
-
-        if not isinstance(
-            recommendation.get("key_findings"),
-            list,
-        ):
-            recommendation["key_findings"] = []
-
-        if not isinstance(
-            recommendation.get("safety_advice"),
-            list,
-        ):
-            recommendation["safety_advice"] = []
-
-        # Maximum two items as requested.
-        recommendation["key_findings"] = (
-            recommendation["key_findings"][:2]
         )
-
-        recommendation["safety_advice"] = (
-            recommendation["safety_advice"][:2]
-        )
-
-        # -------------------------------------------------
-        # Preserve complete specialist data
-        # -------------------------------------------------
-
-        recommendation["agent_findings"] = agent_data
 
         # -------------------------------------------------
         # Pydantic validation
@@ -762,25 +956,23 @@ def recommendation_node(state):
                 recommendation
             )
 
-        except ValidationError as ve:
+        except ValidationError as validation_error:
 
             print(
                 "[recommendation_node] "
-                f"Schema warning: {ve}"
+                "schema_warning="
+                + str(validation_error)
             )
-
-            # Do not destroy a valid generated assessment
-            # because of an optional schema mismatch.
-            recommendation["schema_warning"] = str(ve)
 
         # -------------------------------------------------
         # SUCCESS
         # -------------------------------------------------
 
         print(
-            "[recommendation_node] "
-            "Recommendation generated successfully."
+            "✅ RECOMMENDATION AGENT SUCCESS"
         )
+
+        print("=" * 70)
 
         return {
             "recommendation": recommendation,
@@ -788,30 +980,89 @@ def recommendation_node(state):
         }
 
     # =====================================================
-    # FAILURE
+    # ERROR HANDLING
     # =====================================================
 
-    except Exception as e:
+    except Exception as error:
+
+        print(
+            "❌ RECOMMENDATION AGENT FAILED"
+        )
 
         print(
             "[recommendation_node] "
-            f"Recommendation generation failed: {e}"
+            + repr(error)
         )
 
+        print("=" * 70)
+
+        meaningful_data = (
+            _has_meaningful_data(
+                agent_data
+            )
+        )
+
+        # -------------------------------------------------
+        # Deterministic fallback
+        # -------------------------------------------------
+
+        if meaningful_data:
+
+            fallback_summary = (
+                "Marine assessment completed "
+                "from the available specialist data."
+            )
+
+            fallback_recommendation = (
+                "Review the available marine "
+                "conditions and follow the "
+                "stated safety advice."
+            )
+
+            fallback_risk = "MODERATE"
+
+        else:
+
+            fallback_summary = (
+                "Marine data could not be "
+                "retrieved for this location "
+                "right now."
+            )
+
+            fallback_recommendation = (
+                "Try again shortly, or verify "
+                "the coordinates and retry."
+            )
+
+            fallback_risk = "LOW"
+
+        fallback = {
+
+            "summary": fallback_summary,
+
+            "risk_level": fallback_risk,
+
+            "recommendation":
+                fallback_recommendation,
+
+            "key_findings": [],
+
+            "safety_advice": [],
+
+            # Keep all specialist data
+            # available to the UI.
+
+            "agent_findings":
+                agent_data,
+
+            "error": str(error),
+        }
+
         return {
-            "recommendation": {
-                "summary": (
-                    "The final assessment could not be fully generated."
-                ),
-                "risk_level": "MODERATE",
-                "recommendation": (
-                    "Please review the available marine data "
-                    "before proceeding."
-                ),
-                "key_findings": [],
-                "safety_advice": [],
-                "agent_findings": agent_data,
-                "error": str(e),
-            },
-            "status": "FAILED",
+
+            "recommendation":
+                fallback,
+
+            "status":
+                "FAILED",
         }
