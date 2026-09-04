@@ -40,7 +40,7 @@ load_dotenv()
 # ---------------------------------------------------------
 
 planner_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL_PLANNER", "llama-3.1-8b-instant"),
+    model=os.getenv("GROQ_MODEL_PLANNER", "llama-3.3-70b-versatile"),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
