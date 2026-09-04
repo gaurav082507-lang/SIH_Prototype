@@ -38,6 +38,7 @@ recommendation_llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
     model_kwargs={"response_format": {"type": "json_object"}},
+    max_completion_tokens=500
 )
 
 
