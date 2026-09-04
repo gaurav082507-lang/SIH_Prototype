@@ -1,29 +1,36 @@
 # planner_node.py
 #
-# NOTE: this file previously did
-#     from planner_agent import planner_llm, PLANNER_PROMPT
-# but planner_agent.py never defined either name (it defines
-# build_planner_agent()/run_planner() with a completely different
-# output schema: geocoding/validation/search_grid/route, instead of
-# the flat rejected/required_agents/grid_points/date/latitude/longitude
-# shape that graph.py's routing and every specialist node
-# (weather_node, ocean_node, ecosystem_node, cyclone_node, pfz_node)
-# actually read). That import crashed on the very first request.
+# UPDATED: swapped ChatMistralAI -> ChatGroq. Everything else (chat
+# memory / follow-up handling, schema validation) is unchanged.
 #
-# This node is now self-contained: it owns its own Mistral client and
-# prompt, and always builds the search grid deterministically via
-# tools.generate_grid rather than trusting the LLM to compute
-# coordinates.
+# UPDATED for chat memory: the planner now sees conversation_history
+# (if the caller supplied any) and can decide a question is a pure
+# follow-up on the previous analysis — in which case it's fine to
+# return an empty required_agents list, since the caller may have
+# carried the previous turn's agent data forward into this same state
+# (see the app.py / api.py patches). GIS still always runs regardless
+# (see graph.py's route_after_planner), so that part is unchanged.
+#
+# Also UPDATED to validate the assembled plan with schemas.Plan before
+# returning it, so a malformed shape is caught here rather than
+# surfacing as a confusing error three nodes later.
+#
+# (Original note, unchanged: this node is self-contained — it owns its
+# own LLM client/prompt rather than importing from planner_agent.py,
+# which defines a different, incompatible output schema and is not
+# wired into graph.py. See AI_EXISTING_CODE_AUDIT.md.)
 
 import json
 import os
 from datetime import date as _date
 
 from dotenv import load_dotenv
-from langchain_mistralai import ChatMistralAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from pydantic import ValidationError
 
 from tools import generate_grid
+from schemas import Plan
 
 load_dotenv()
 
@@ -32,13 +39,12 @@ load_dotenv()
 # LLM
 # ---------------------------------------------------------
 
-from langchain_groq import ChatGroq
-
 planner_llm = ChatGroq(
     model=os.getenv("GROQ_MODEL_PLANNER", "llama-3.1-8b-instant"),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=6,
+    model_kwargs={"response_format": {"type": "json_object"}},
 )
 
 
@@ -55,6 +61,8 @@ ALLOWED_AGENTS = {
     "pfz",
     "gis",
 }
+
+MAX_HISTORY_TURNS_IN_PROMPT = 3
 
 PLANNER_PROMPT = ChatPromptTemplate.from_template(
 """
@@ -82,8 +90,24 @@ Rules:
   of what you choose here, so you do not need to include it — but it is
   harmless if you do.
 - Never leave required_agents empty unless the request has nothing to
-  do with marine conditions at all.
+  do with marine conditions at all, OR (see below) this is a pure
+  follow-up question that can be answered from data already collected
+  in a previous turn.
 - Do not invent data yourself — you are only selecting which agents run.
+
+CONVERSATION HISTORY (most recent last; may be empty if this is the
+first message):
+
+{conversation_history}
+
+If PRIOR_TURNS above is non-empty and the user's new question is
+clearly a follow-up about the SAME location/analysis already discussed
+(e.g. "why is that risky", "what about the northeast point", "explain
+that further") rather than a request for new/different conditions, you
+may return an empty required_agents list — the caller will still have
+the previous turn's data available downstream. If the question asks
+about a genuinely new date, activity, or location, treat it as a fresh
+request and select agents normally.
 
 Return ONLY valid JSON, no markdown fences, in this exact schema:
 
@@ -111,22 +135,46 @@ Longitude: {longitude}
 )
 
 
+def _format_history(conversation_history):
+    """Compact the last few turns into a short text block for the
+    prompt — full agent_data is deliberately NOT included here, only
+    the question and the prior recommendation's summary/risk_level, to
+    keep this prompt small regardless of how much raw data previous
+    turns collected."""
+    if not conversation_history:
+        return "(no prior turns)"
+
+    recent = conversation_history[-MAX_HISTORY_TURNS_IN_PROMPT:]
+    lines = []
+    for turn in recent:
+        question = turn.get("question", "")
+        rec = turn.get("recommendation") or {}
+        summary = rec.get("summary", "") if isinstance(rec, dict) else ""
+        risk_level = rec.get("risk_level", "") if isinstance(rec, dict) else ""
+        lines.append(f"- User asked: {question!r} -> risk_level={risk_level!r}, summary={summary!r}")
+    return "\n".join(lines)
+
+
 def planner_node(state):
     """
     Planner Agent
 
-    Uses Mistral to:
-    1. Understand the user's marine query
-    2. Determine the required specialist agents
+    Uses the LLM to:
+    1. Understand the user's marine query (in light of any conversation
+       history the caller supplied)
+    2. Determine the required specialist agents (possibly none, for a
+       pure follow-up question)
     3. Determine the date / activity
     4. Generate grid points deterministically (tools.generate_grid)
-    5. Return a structured plan
+    5. Return a structured, schema-validated plan
     """
 
     user_question = state.get("user_question", "")
 
     latitude = state.get("latitude")
     longitude = state.get("longitude")
+
+    conversation_history = state.get("conversation_history", [])
 
     if not user_question:
         return {
@@ -153,6 +201,7 @@ def planner_node(state):
                 latitude=latitude,
                 longitude=longitude,
                 today=_date.today().isoformat(),
+                conversation_history=_format_history(conversation_history),
             )
         )
 
@@ -198,9 +247,14 @@ def planner_node(state):
 
         # -----------------------------------------------------
         # Deterministic search grid — never computed by the LLM.
+        # Skipped for a pure follow-up (no agents required) at the
+        # same location, since the caller already has grid points
+        # from the previous turn's carried-forward data.
         # -----------------------------------------------------
 
         if plan.get("rejected"):
+            plan["grid_points"] = []
+        elif not required_agents and conversation_history:
             plan["grid_points"] = []
         else:
             grid_result = generate_grid.invoke({
@@ -210,6 +264,18 @@ def planner_node(state):
                 "num_points": 10,
             })
             plan["grid_points"] = grid_result
+
+        # -----------------------------------------------------
+        # Schema validation — catches a malformed shape here rather
+        # than three nodes downstream. Does not block the pipeline on
+        # failure (a demo shouldn't hard-crash on a validation edge
+        # case); it just records the warning.
+        # -----------------------------------------------------
+
+        try:
+            Plan.model_validate(plan)
+        except ValidationError as ve:
+            plan["schema_warning"] = str(ve)
 
         return {
             "plan": plan
