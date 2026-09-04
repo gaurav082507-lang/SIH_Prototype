@@ -1,4 +1,3 @@
-
 import requests
 from langchain_core.tools import tool
 
@@ -25,10 +24,13 @@ def get_ecosystem_data(
         "date": date
     }
 
+    # timeout intentionally removed (per request) — see pfz_tool.py for
+    # the trade-off: this call now waits indefinitely instead of
+    # failing after 60s if the ecosystem backend hangs.
     response = requests.get(
         ECOSYSTEM_API_URL,
         params=params,
-        timeout=60
+        timeout=None
     )
 
     response.raise_for_status()
