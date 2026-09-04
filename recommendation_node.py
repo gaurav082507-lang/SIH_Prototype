@@ -82,7 +82,43 @@ OTHER AGENT NULL VALUES:
 - pfz = null → ignore that PFZ finding and use other available data.
 - gis = null → ignore that GIS finding and use other available data.
 
-RULES:
+VALUE-DISPLAY RULE:
+- If the user explicitly asks for specific values, measurements, coordinates,
+  times, conditions, or other factual data, include the requested values from
+  the supplied marine agent data in the response.
+- Examples include:
+  - wind speed
+  - wind gusts
+  - temperature
+  - visibility
+  - precipitation probability
+  - wave height
+  - wave period
+  - sea-surface temperature
+  - tide height
+  - tide time
+  - tide status
+  - cyclone distance
+  - cyclone position
+  - cyclone wind speed
+  - PFZ latitude/longitude
+  - distance from shore
+  - port distance
+  - GIS/restricted-zone information
+  - any other numerical or factual value present in the supplied agent data.
+- If the requested value exists in the supplied data, display the ACTUAL value.
+- Do NOT replace an available value with a vague statement such as
+  "conditions are moderate".
+- Do NOT invent a value that is not present in the supplied data.
+- If a specifically requested value is null, omit that value rather than
+  inventing it or calling the entire assessment "insufficient data".
+- If multiple values are requested and some are available while others are
+  null, display the available values and continue the assessment normally.
+- Preserve the units provided by the agent data.
+- If the data has no unit, do not invent one.
+- Keep the response concise while still including explicitly requested values.
+
+GENERAL RULES:
 - Do not invent data.
 - Use all meaningful data that is actually supplied.
 - Partial agent data is acceptable.
@@ -92,17 +128,11 @@ RULES:
 - Do not increase the risk level merely because some data fields are null.
 - risk_level MUST match overall_rule_based_severity when it is not
   "insufficient_data".
-- If overall_rule_based_severity is "insufficient_data", do NOT automatically
-  call the entire assessment insufficient. Use the available marine evidence
-  to determine the best supported risk_level.
+- If overall_rule_based_severity is "insufficient_data", use the available
+  marine evidence to determine the best supported risk_level.
 - Only mention insufficient data when essentially NO meaningful marine
   intelligence is available to make a reasonable assessment.
 - Keep the response concise.
-- Return ONLY one valid JSON object.
-- Do not use markdown.
-- Do not wrap the JSON in code fences.
-- Do not return a JSON-encoded string.
-- Return a normal JSON object, not a quoted JSON string.
 
 USER QUESTION:
 {user_question}
@@ -113,6 +143,18 @@ RULE-BASED RISK:
 MARINE AGENT DATA:
 {agent_data}
 
+OUTPUT REQUIREMENTS:
+- Return ONLY one valid JSON object.
+- Do not use markdown.
+- Do not wrap the JSON in code fences.
+- Do not return a JSON-encoded string.
+- Return a normal JSON object, not a quoted JSON string.
+- Do NOT include agent_findings in your JSON.
+- Keep summary to one sentence.
+- Keep recommendation to one sentence.
+- Return at most 2 key_findings.
+- Return at most 2 safety_advice items.
+
 JSON FORMAT:
 {{
   "summary": "One short overall assessment",
@@ -122,14 +164,11 @@ JSON FORMAT:
   "safety_advice": ["advice 1", "advice 2"]
 }}
 
-IMPORTANT OUTPUT RULES:
-- Do NOT include agent_findings in your JSON.
-- Keep summary to one sentence.
-- Keep recommendation to one sentence.
-- Return at most 2 key_findings.
-- Return at most 2 safety_advice items.
-- Do not mention null values in the final answer unless they are directly
-  relevant to the user's question.
+IMPORTANT:
+- The summary may contain explicitly requested values when necessary.
+- key_findings should contain requested factual values when appropriate.
+- recommendation should remain actionable.
+- Do not mention null values unless directly relevant.
 - Do not describe null cyclone data as insufficient data.
 - Do not describe partial agent data as a failure.
 
