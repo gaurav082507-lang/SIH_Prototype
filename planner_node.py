@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from tools import generate_grid, check_coastal_proximity
 from schemas import Plan
@@ -28,14 +29,11 @@ load_dotenv()
 # LLM
 # ============================================================
 
-planner_llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL_PLANNER", "openai/gpt-oss-120b"),
+planner_llm = ChatGoogleGenerativeAI(
+    model=os.getenv("GROQ_MODEL_PLANNER", "gemini-3.5-flash"),
     temperature=0,
-    api_key=os.getenv("GROQ_API_KEY"),
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
     max_retries=2,
-    reasoning_effort="low",
-    include_reasoning=False,
-    max_completion_tokens=300,
 )
 
 
