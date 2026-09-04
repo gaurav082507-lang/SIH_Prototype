@@ -46,6 +46,18 @@ AVAILABLE_AGENTS = [
     ("🗺️", "GIS", "gis"),
 ]
 
+# Icon + display label for each agent's raw output panel, keyed by the
+# same field names used in recommendation_node.py's agent_data dict.
+AGENT_OUTPUT_META = {
+    "weather": ("🌤️", "Weather"),
+    "ocean": ("🌊", "Ocean"),
+    "tide": ("🌙", "Tide"),
+    "cyclone": ("🌀", "Cyclone"),
+    "ecosystem": ("🐟", "Ecosystem"),
+    "pfz": ("🎣", "PFZ"),
+    "gis": ("🗺️", "GIS"),
+}
+
 ALWAYS_ON_AGENTS = {"gis"}
 
 # Order matters for layout purposes: index 0 = Planner, index 1 = GIS,
@@ -854,6 +866,64 @@ def _normalize_recommendation(result):
     return recommendation
 
 
+def _json_safe(data):
+    """
+    Coerce arbitrary agent output (which may contain numpy scalars,
+    pandas Timestamps, etc.) into plain JSON-serializable Python objects
+    so st.json() never raises on unusual dtypes coming out of pandas.
+    """
+    try:
+        return json.loads(json.dumps(data, default=str))
+    except Exception:
+        return {"raw": str(data)}
+
+
+def render_agent_outputs(recommendation):
+    """
+    Show the raw output of every specialist agent, so the user (and
+    whoever is debugging the pipeline) can see exactly what each agent
+    returned instead of only the LLM's synthesized summary.
+
+    Reads from recommendation["agent_findings"], which recommendation_node.py
+    always populates with the full, uncompacted per-agent data (or None
+    for any agent that didn't run / returned nothing).
+    """
+
+    agent_findings = recommendation.get("agent_findings")
+
+    if not isinstance(agent_findings, dict) or not agent_findings:
+        return
+
+    populated_count = sum(
+        1 for value in agent_findings.values() if value is not None
+    )
+    total_count = len(agent_findings)
+
+    st.markdown(
+        '<div class="section-title">📡 Specialist Agent Data</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.caption(
+        f"{populated_count} of {total_count} agents returned data for this query."
+    )
+
+    for key, (icon, label) in AGENT_OUTPUT_META.items():
+        data = agent_findings.get(key)
+
+        has_data = data is not None
+        header = f"{icon} {label}" + ("" if has_data else " — no data")
+
+        with st.expander(header, expanded=False):
+            if not has_data:
+                st.caption(
+                    "This agent was either not required for the question, "
+                    "or did not return any data."
+                )
+            else:
+                st.json(_json_safe(data), expanded=False)
+
+
 def render_final_result(result, latitude, longitude):
     recommendation = _normalize_recommendation(result)
 
@@ -948,6 +1018,8 @@ def render_final_result(result, latitude, longitude):
         )
 
         st.error(str(error_message))
+
+    render_agent_outputs(recommendation)
 
 
 # ============================================================
