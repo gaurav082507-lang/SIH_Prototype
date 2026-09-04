@@ -12,6 +12,7 @@
 
 import json
 import os
+import re
 
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -30,7 +31,9 @@ recommendation_llm = ChatGroq(
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=2,
-    max_completion_tokens=220,
+    reasoning_effort="low",
+    include_reasoning=False,
+    max_completion_tokens=300,
 )
 
 
@@ -304,15 +307,87 @@ def recommendation_node(state):
 
         content = _clean_model_content(response.content)
 
+        print(
+            "[recommendation_node] "
+            f"raw_response_chars={len(content)}"
+        )
+        print(
+            "[recommendation_node] "
+            f"raw_response={repr(content[:4000])}"
+        )
+
         # -------------------------------------------------
-        # Parse JSON locally
+        # Parse JSON locally, safely
         # -------------------------------------------------
 
-        recommendation = json.loads(content)
-
-        if not isinstance(recommendation, dict):
+        if not content:
             raise ValueError(
-                "Model returned JSON, but the top-level value was not an object."
+                "Recommendation model returned an empty response. "
+                "The GPT-OSS completion may have exhausted its budget "
+                "during reasoning."
+            )
+
+        # First try the complete response.
+        recommendation = None
+
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                recommendation = parsed
+        except json.JSONDecodeError:
+            pass
+
+        # If the model added text around the JSON, extract the first
+        # balanced JSON object.
+        if recommendation is None:
+            start_positions = [
+                match.start()
+                for match in re.finditer(r"\\{", content)
+            ]
+
+            for start in start_positions:
+                depth = 0
+                in_string = False
+                escaped = False
+
+                for index in range(start, len(content)):
+                    char = content[index]
+
+                    if in_string:
+                        if escaped:
+                            escaped = False
+                        elif char == "\\\\":
+                            escaped = True
+                        elif char == '"':
+                            in_string = False
+                        continue
+
+                    if char == '"':
+                        in_string = True
+                    elif char == "{":
+                        depth += 1
+                    elif char == "}":
+                        depth -= 1
+
+                        if depth == 0:
+                            candidate = content[start:index + 1]
+
+                            try:
+                                parsed = json.loads(candidate)
+                                if isinstance(parsed, dict):
+                                    recommendation = parsed
+                            except json.JSONDecodeError:
+                                pass
+
+                            break
+
+                if recommendation is not None:
+                    break
+
+        if recommendation is None:
+            raise ValueError(
+                "Recommendation model returned non-JSON content: "
+                f"{content[:1200]!r}"
             )
 
         # -------------------------------------------------
