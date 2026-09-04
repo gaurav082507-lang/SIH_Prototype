@@ -3,6 +3,7 @@ import textwrap
 from datetime import datetime
 
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 
 from graph import marine_graph
@@ -409,12 +410,48 @@ with st.sidebar:
         key="longitude",
     )
 
-    st.map(
-        pd.DataFrame(
-            {"lat": [latitude], "lon": [longitude]}
+    # Interactive target-location map with a visible pin marker.
+    location_df = pd.DataFrame(
+        {
+            "lat": [latitude],
+            "lon": [longitude],
+            "label": ["📍"],
+        }
+    )
+
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(
+                latitude=float(latitude),
+                longitude=float(longitude),
+                zoom=5,
+                pitch=0,
+                bearing=0,
+            ),
+            layers=[
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=location_df,
+                    get_position="[lon, lat]",
+                    get_radius=1800,
+                    pickable=True,
+                ),
+                pdk.Layer(
+                    "TextLayer",
+                    data=location_df,
+                    get_position="[lon, lat]",
+                    get_text="label",
+                    get_size=28,
+                    get_alignment_baseline="'bottom'",
+                    get_text_anchor="'middle'",
+                    billboard=True,
+                ),
+            ],
+            tooltip={"text": "Selected Location\nLat: {lat}\nLon: {lon}"},
         ),
-        zoom=5,
         height=180,
+        use_container_width=True,
     )
 
     st.divider()
