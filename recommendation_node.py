@@ -32,7 +32,7 @@ from schemas import Recommendation
 recommendation_llm = ChatGroq(
     model=os.getenv(
         "GROQ_MODEL_RECOMMENDATION",
-        "llama-3.3-70b-versatile"
+        "openai/gpt-oss-120b"
     ),
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
