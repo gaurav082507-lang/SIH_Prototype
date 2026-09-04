@@ -1,22 +1,17 @@
 # recommendation_node.py
 #
-# UPDATED: swapped ChatMistralAI -> ChatGroq (JSON mode forced via
-# response_format to reduce parse failures, since Llama models are
-# slightly less reliable at "return only JSON" than Mistral was).
-#
-# Retained from before:
-#   1. Chat memory — includes conversation_history (compacted) in the
-#      prompt, so the model can reference prior turns ("as found
-#      earlier...") instead of treating every message as a cold start.
-#   2. Risk/decision separation — receives risk_signals (computed by
-#      risk_rules.risk_node, which now runs before this node in
-#      graph.py) and is told to treat it as ground truth for
-#      risk_level rather than re-deriving severity purely from vibes.
-#   3. Schema validation — the parsed JSON is checked against
-#      schemas.Recommendation before being returned.
+# Groq 8K-friendly final recommendation node.
+# - Uses openai/gpt-oss-120b by default.
+# - Keeps the prompt deliberately small.
+# - Does NOT use response_format/json_schema, avoiding Groq JSON validation
+#   failures while keeping local JSON parsing + Pydantic validation.
+# - Sends only compacted specialist data to the model.
+# - Keeps complete agent data in the returned recommendation.
+# - Conversation history is intentionally omitted from the LLM prompt to
+#   protect the 8K TPM budget. The current user question remains authoritative.
 
-import os
 import json
+import os
 
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -34,216 +29,200 @@ recommendation_llm = ChatGroq(
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
     max_retries=2,
-    max_completion_tokens=300,
+    max_completion_tokens=220,
 )
+
 
 # ---------------------------------------------------------
 # PROMPT
 # ---------------------------------------------------------
+# Keep this prompt short. Groq's free limit for GPT-OSS 120B is 8K TPM,
+# so the data budget below is intentionally conservative.
 
 RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template(
-"""
+    """
 You are the Final Marine Intelligence and Recommendation Agent.
 
-You receive structured data collected by specialist marine
-agents, a rule-based risk pre-assessment, and (if this is not the
-first message) a short history of the conversation so far.
+Answer the user's current question using ONLY the supplied marine agent data
+and rule-based risk assessment.
 
-Your job is to analyze the available data and provide a
-clear, evidence-based recommendation for the user.
+RULES:
+- Do not invent data.
+- Use only agents whose data is present.
+- Missing/null agent data means that agent is unavailable.
+- Prioritize safety.
+- Explain the main reasons for the recommendation.
+- If dangerous conditions are present, clearly warn the user.
+- risk_level MUST match overall_rule_based_severity when it is not
+  "insufficient_data".
+- If overall_rule_based_severity is "insufficient_data", choose risk_level
+  from the available data and say that the automated risk check had
+  insufficient data.
+- Keep the response concise.
+- Return ONLY one valid JSON object. No markdown. No explanation outside JSON.
 
-Do NOT invent data.
-
-Only use information present in the agent outputs.
-
-Available specialist agents:
-
-1. Weather
-   - temperature
-   - rainfall
-   - wind
-   - visibility
-   - atmospheric conditions
-
-2. Ocean
-   - waves
-   - wave height
-   - swell
-   - sea state
-   - ocean conditions
-
-3. Tide
-   - high tide
-   - low tide
-   - tidal conditions
-
-4. Cyclone
-   - cyclone information
-   - storm conditions
-   - cyclone warnings
-   - cyclone proximity
-
-5. Ecosystem
-   - marine ecosystem
-   - biodiversity
-   - marine species
-   - ecological conditions
-
-6. PFZ (Potential Fishing Zone)
-   - recommended fishing zones
-   - fishing-zone suitability
-
-7. GIS (coastal/marine geospatial context)
-   - distance to coast, water depth
-   - restricted zones and marine protected areas (geofencing)
-   - maritime/EEZ boundary and jurisdiction
-   - nearest port
-
-
-IMPORTANT RULES:
-
-- Consider only agents that actually returned data.
-- Do not assume an agent was executed if its data is null.
-- Do not invent missing values.
-- If an agent failed, mention that its data was unavailable.
-- Give priority to safety-related information.
-- If dangerous marine conditions are present, clearly warn the user.
-- Explain WHY the recommendation was made.
-- Keep the final recommendation understandable.
-- Do not expose internal implementation details.
-- RISK PRE-ASSESSMENT below is computed by fixed, documented
-  thresholds (wind, wave height, cyclone distance), not by you. Set
-  "risk_level" to match its "overall_rule_based_severity" unless it is
-  "insufficient_data", in which case use your own judgment from
-  whatever agent data is available and say explicitly that the
-  automated risk check had insufficient data.
-- If CONVERSATION HISTORY is non-empty, treat this as a continuing
-  conversation: reference earlier findings where relevant instead of
-  repeating a full fresh analysis, and answer the user's actual new
-  question directly.
-- Some agent data below may be abbreviated ("...N more entries
-  omitted for brevity...") to keep this prompt a reasonable size —
-  treat that as "additional similar data points were collected but
-  not shown", not as missing data.
-
-Conversation History:
-
-{conversation_history}
-
-Risk Pre-Assessment (rule-based, authoritative for severity):
-
-{risk_signals}
-
-User Question:
-
+USER QUESTION:
 {user_question}
 
+RULE-BASED RISK:
+{risk_signals}
 
-Agent Data:
-
+MARINE AGENT DATA:
 {agent_data}
 
-
-Return ONLY valid JSON in this format:
-
+JSON FORMAT:
 {{
-    "summary": "Short overall assessment",
-
-    "risk_level": "LOW",
-
-    "recommendation": "Clear recommendation to the user",
-
-    "key_findings": [
-        "Important finding 1",
-        "Important finding 2"
-    ],
-
-    "safety_advice": [
-        "Safety advice 1",
-        "Safety advice 2"
-    ],
-
-    "agent_findings": {{
-        "weather": null,
-        "ocean": null,
-        "tide": null,
-        "cyclone": null,
-        "ecosystem": null,
-        "pfz": null,
-        "gis": null
-    }}
+  "summary": "Short overall assessment",
+  "risk_level": "LOW",
+  "recommendation": "Clear recommendation",
+  "key_findings": ["finding 1", "finding 2"],
+  "safety_advice": ["advice 1", "advice 2"],
+  "agent_findings": {{
+    "weather": null,
+    "ocean": null,
+    "tide": null,
+    "cyclone": null,
+    "ecosystem": null,
+    "pfz": null,
+    "gis": null
+  }}
 }}
 
-risk_level must be one of:
-
-LOW
-MODERATE
-HIGH
-SEVERE
+risk_level must be exactly one of:
+LOW, MODERATE, HIGH, SEVERE
 """
 )
 
 
 # ---------------------------------------------------------
-# PROMPT-SIZE COMPACTION (unchanged from original)
+# PROMPT-SIZE LIMITS
 # ---------------------------------------------------------
+# These limits are deliberately conservative for Groq's 8K TPM limit.
+# The model sees compacted data only; the full data is still returned.
 
-MAX_LIST_LEN = 6
-MAX_COMPACT_DEPTH = 6
-MAX_PROMPT_CHARS = 24000
-MAX_HISTORY_TURNS_IN_PROMPT = 5
+MAX_LIST_LEN = 3
+MAX_COMPACT_DEPTH = 4
+
+# Maximum characters of specialist data sent to the model.
+# 10,000 chars is intentionally below the previous 24,000-char budget.
+MAX_AGENT_DATA_CHARS = 10000
+
+# Maximum user-question size sent to the model.
+MAX_QUESTION_CHARS = 1800
+
+# Maximum risk JSON size sent to the model.
+MAX_RISK_CHARS = 2500
 
 
-def _compact_for_llm(obj, max_list_len=MAX_LIST_LEN, max_depth=MAX_COMPACT_DEPTH, _depth=0):
-    """Recursively shrink long lists so large per-grid-point/per-hour time
-    series don't blow out the LLM's prompt size limit. Keeps the first
-    (max_list_len - 1) entries of any oversized list and appends a short
-    note describing how many were omitted. Dicts and scalars pass through
-    unchanged (aside from recursing into their contents)."""
+def _compact_for_llm(
+    obj,
+    max_list_len=MAX_LIST_LEN,
+    max_depth=MAX_COMPACT_DEPTH,
+    _depth=0,
+):
+    """
+    Recursively shrink long lists and deeply nested structures.
 
+    Keeps only a few representative list entries so time-series/grid data
+    cannot consume the entire LLM prompt.
+    """
     if _depth >= max_depth:
+        # At excessive nesting depth, return a compact string representation.
+        if isinstance(obj, (dict, list)):
+            return str(obj)
         return obj
 
     if isinstance(obj, dict):
         return {
-            key: _compact_for_llm(value, max_list_len, max_depth, _depth + 1)
+            key: _compact_for_llm(
+                value,
+                max_list_len,
+                max_depth,
+                _depth + 1,
+            )
             for key, value in obj.items()
         }
 
     if isinstance(obj, list):
         if len(obj) > max_list_len:
             kept = obj[: max_list_len - 1]
+
             compacted = [
-                _compact_for_llm(item, max_list_len, max_depth, _depth + 1)
+                _compact_for_llm(
+                    item,
+                    max_list_len,
+                    max_depth,
+                    _depth + 1,
+                )
                 for item in kept
             ]
+
             omitted = len(obj) - len(kept)
-            compacted.append(f"...{omitted} more entries omitted for brevity...")
+            compacted.append(
+                f"...{omitted} more entries omitted for brevity..."
+            )
             return compacted
+
         return [
-            _compact_for_llm(item, max_list_len, max_depth, _depth + 1)
+            _compact_for_llm(
+                item,
+                max_list_len,
+                max_depth,
+                _depth + 1,
+            )
             for item in obj
         ]
 
     return obj
 
 
-def _format_history_for_prompt(conversation_history):
-    """Same idea as planner_node._format_history: only question +
-    prior recommendation summary/risk_level, never raw agent_data, so
-    history never dominates the prompt-size budget."""
-    if not conversation_history:
-        return "(no prior turns — this is the first message)"
+def _safe_json_text(obj, max_chars):
+    """Serialize an object to compact JSON and cap its size."""
+    text = json.dumps(
+        obj,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        default=str,
+    )
 
-    recent = conversation_history[-MAX_HISTORY_TURNS_IN_PROMPT:]
-    lines = []
-    for turn in recent:
-        question = turn.get("question", "")
-        rec = turn.get("recommendation") or {}
-        summary = rec.get("summary", "") if isinstance(rec, dict) else ""
-        risk_level = rec.get("risk_level", "") if isinstance(rec, dict) else ""
-        lines.append(f"- User asked: {question!r} -> risk_level={risk_level!r}, summary={summary!r}")
-    return "\n".join(lines)
+    if len(text) <= max_chars:
+        return text
+
+    return (
+        text[:max_chars]
+        + ',"_truncated":"additional data omitted to protect LLM token budget"}'
+        if text.startswith("{")
+        else text[:max_chars]
+        + "\n... [truncated to protect LLM token budget] ..."
+    )
+
+
+def _clean_model_content(content):
+    """Remove accidental markdown fences from model output."""
+    if isinstance(content, list):
+        parts = []
+
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if text:
+                    parts.append(str(text))
+            else:
+                parts.append(str(item))
+
+        content = "".join(parts)
+
+    content = str(content).strip()
+
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+
+    if content.endswith("```"):
+        content = content[:-3]
+
+    return content.strip()
 
 
 # ---------------------------------------------------------
@@ -254,18 +233,16 @@ def recommendation_node(state):
     """
     Final Recommendation Agent.
 
-    Combines outputs from all executed specialist agents, the
-    rule-based risk pre-assessment, and any conversation history, and
-    uses the LLM to generate the final assessment.
+    Combines specialist outputs and rule-based risk assessment.
+    Only compact data is sent to the LLM. Complete specialist data remains
+    available in the returned recommendation.
     """
 
-    user_question = state.get(
-        "user_question",
-        ""
-    )
+    user_question = str(
+        state.get("user_question", "")
+    ).strip()[:MAX_QUESTION_CHARS]
 
-    conversation_history = state.get("conversation_history", [])
-    risk_signals = state.get("risk_signals", {})
+    risk_signals = state.get("risk_signals") or {}
 
     # -----------------------------------------------------
     # Collect specialist outputs
@@ -282,71 +259,92 @@ def recommendation_node(state):
     }
 
     try:
-
         # -------------------------------------------------
-        # Compact + convert to JSON for the LLM
+        # Compact specialist data
         # -------------------------------------------------
-        # NOTE: agent_data (the full, uncompacted version) is still
-        # what we return in agent_findings on both success and
-        # failure below, so the UI/caller always sees complete data —
-        # only what we SEND to the model is size-capped.
 
-        agent_data_for_prompt = _compact_for_llm(agent_data)
+        compact_agent_data = _compact_for_llm(agent_data)
 
-        agent_data_json = json.dumps(
-            agent_data_for_prompt,
-            ensure_ascii=False,
-            indent=2,
-            default=str
+        agent_data_json = _safe_json_text(
+            compact_agent_data,
+            MAX_AGENT_DATA_CHARS,
         )
 
-        if len(agent_data_json) > MAX_PROMPT_CHARS:
-            agent_data_json = (
-                agent_data_json[:MAX_PROMPT_CHARS]
-                + "\n... [truncated: agent data exceeded prompt size limit] ..."
-            )
+        risk_json = _safe_json_text(
+            risk_signals,
+            MAX_RISK_CHARS,
+        )
 
         # -------------------------------------------------
-        # Call the LLM
+        # Debug information
+        # -------------------------------------------------
+
+        prompt_text = RECOMMENDATION_PROMPT.format(
+            user_question=user_question,
+            agent_data=agent_data_json,
+            risk_signals=risk_json,
+        )
+
+        print(
+            f"[recommendation_node] prompt_chars={len(prompt_text)}"
+        )
+
+        # -------------------------------------------------
+        # Call LLM
         # -------------------------------------------------
 
         response = recommendation_llm.invoke(
             RECOMMENDATION_PROMPT.format(
                 user_question=user_question,
                 agent_data=agent_data_json,
-                conversation_history=_format_history_for_prompt(conversation_history),
-                risk_signals=json.dumps(risk_signals, ensure_ascii=False, indent=2, default=str),
+                risk_signals=risk_json,
             )
         )
 
-        content = response.content
+        content = _clean_model_content(response.content)
 
         # -------------------------------------------------
-        # Remove markdown code fences
+        # Parse JSON locally
         # -------------------------------------------------
 
-        if "```json" in content:
-            content = content.replace(
-                "```json",
-                ""
-            ).replace(
-                "```",
-                ""
-            )
+        recommendation = json.loads(content)
 
-        elif "```" in content:
-            content = content.replace(
-                "```",
-                ""
+        if not isinstance(recommendation, dict):
+            raise ValueError(
+                "Model returned JSON, but the top-level value was not an object."
             )
 
         # -------------------------------------------------
-        # Parse JSON
+        # Ensure required fields exist
         # -------------------------------------------------
 
-        recommendation = json.loads(
-            content.strip()
+        recommendation.setdefault(
+            "summary",
+            "Marine assessment completed.",
         )
+
+        recommendation.setdefault(
+            "risk_level",
+            "MODERATE",
+        )
+
+        recommendation.setdefault(
+            "recommendation",
+            "Review the available marine data before proceeding.",
+        )
+
+        recommendation.setdefault(
+            "key_findings",
+            [],
+        )
+
+        recommendation.setdefault(
+            "safety_advice",
+            [],
+        )
+
+        # Keep the complete specialist outputs available to the caller/UI.
+        recommendation["agent_findings"] = agent_data
 
         # -------------------------------------------------
         # Schema validation
@@ -355,14 +353,20 @@ def recommendation_node(state):
         try:
             Recommendation.model_validate(recommendation)
         except ValidationError as ve:
+            # Do not fail the whole graph just because the optional schema
+            # has a mismatch. Preserve the generated recommendation and
+            # expose the validation warning for debugging.
             recommendation["schema_warning"] = str(ve)
 
         return {
             "recommendation": recommendation,
-            "status": "SUCCESS"
+            "status": "SUCCESS",
         }
 
     except json.JSONDecodeError as e:
+        print(
+            f"[recommendation_node] JSON parse error: {e}"
+        )
 
         return {
             "recommendation": {
@@ -372,12 +376,15 @@ def recommendation_node(state):
                 "key_findings": [],
                 "safety_advice": [],
                 "agent_findings": agent_data,
-                "error": str(e)
+                "error": str(e),
             },
-            "status": "FAILED"
+            "status": "FAILED",
         }
 
     except Exception as e:
+        print(
+            f"[recommendation_node] Recommendation generation failed: {e}"
+        )
 
         return {
             "recommendation": {
@@ -387,7 +394,7 @@ def recommendation_node(state):
                 "key_findings": [],
                 "safety_advice": [],
                 "agent_findings": agent_data,
-                "error": str(e)
+                "error": str(e),
             },
-            "status": "FAILED"
+            "status": "FAILED",
         }
