@@ -63,6 +63,22 @@ IMPORTANT DATA INTERPRETATION:
 - NEVER invent a value for a null field.
 - Do not treat a null value as an error.
 
+NO-DATA FALLBACK RULE (highest priority — check this first):
+- If EVERY supplied agent field (weather, ocean, tide, cyclone, ecosystem,
+  pfz, gis) is null, missing, or empty — meaning there is NO usable marine
+  data at all from any agent — do NOT attempt a marine safety assessment.
+- This total absence of data across every agent almost always means the
+  requested coordinates do not lie in a coastal/marine region that any
+  agent's data source actually covers.
+- In this case, and ONLY in this case, respond with:
+  - "summary": "The given coordinates don't lie in a coastal region."
+  - "risk_level": "LOW"
+  - "recommendation": "Provide coordinates within a coastal or marine area to get a marine assessment."
+  - "key_findings": []
+  - "safety_advice": []
+- Do not apply this rule if even one agent returned a real (non-null)
+  finding — in that case follow the normal rules below instead.
+
 CYCLONE-SPECIFIC RULE:
 - If cyclone data is null, interpret it as:
   "No cyclone threat is indicated by the available cyclone assessment."
