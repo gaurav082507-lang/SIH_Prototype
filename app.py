@@ -48,6 +48,9 @@ AVAILABLE_AGENTS = [
 
 ALWAYS_ON_AGENTS = {"gis"}
 
+# Order matters for layout purposes: index 0 = Planner, index 1 = GIS,
+# the middle block are the agents that can run in parallel once GIS/Planner
+# have finished, and the last entry is the final synthesis step.
 PIPELINE_DEFS = [
     ("planner", "🧠", "Planner"),
     ("gis", "🗺️", "GIS"),
@@ -159,7 +162,7 @@ st.markdown(
         }
 
         .pipeline-shell {
-            padding: 14px;
+            padding: 16px;
             border-radius: 18px;
             background: rgba(7,22,38,.70);
             border: 1px solid rgba(0,180,216,.18);
@@ -172,43 +175,42 @@ st.markdown(
             font-weight: 700;
             letter-spacing: 1.2px;
             margin-bottom: 10px;
+            text-align: center;
         }
 
-        .pipe-scroll {
-            overflow-x: auto;
-            padding-bottom: 4px;
-        }
+        /* ---- Parallel flow layout ---- */
 
-        .pipe-row {
+        .pipeline-flow {
             display: flex;
-            align-items: stretch;
-            min-width: 920px;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 0 2px;
         }
 
-        .pipe-node {
-            min-width: 104px;
-            padding: 12px 8px;
+        .flow-node {
+            min-width: 128px;
+            padding: 12px 10px;
             border-radius: 14px;
             text-align: center;
             border: 1px solid rgba(120,190,230,.18);
             background: rgba(10,28,48,.70);
         }
 
-        .pipe-node.pending {
+        .flow-node.pending {
             opacity: .60;
         }
 
-        .pipe-node.active {
+        .flow-node.active {
             border-color: #00b4d8;
             box-shadow: 0 0 0 2px rgba(0,180,216,.12);
         }
 
-        .pipe-node.done {
+        .flow-node.done {
             border-color: #34d399;
             background: rgba(16,60,50,.55);
         }
 
-        .pipe-node.skipped {
+        .flow-node.skipped {
             opacity: .35;
             border-style: dashed;
         }
@@ -230,28 +232,84 @@ st.markdown(
             letter-spacing: .3px;
         }
 
-        .pipe-node.active .pipe-state {
+        .flow-node.active .pipe-state {
             color: #6ee7ff;
             font-weight: 700;
         }
 
-        .pipe-node.done .pipe-state {
+        .flow-node.done .pipe-state {
             color: #5eead4;
             font-weight: 700;
         }
 
-        .pipe-node.pending .pipe-state,
-        .pipe-node.skipped .pipe-state {
+        .flow-node.pending .pipe-state,
+        .flow-node.skipped .pipe-state {
             color: #7f97b3;
         }
 
-        .pipe-arrow {
-            display: flex;
-            align-items: center;
-            padding: 0 5px;
-            color: #52718e;
-            font-size: 16px;
+        .flow-connector {
+            width: 2px;
+            height: 22px;
+            background: rgba(120,190,230,.25);
         }
+
+        .flow-connector.active {
+            background: #00b4d8;
+        }
+
+        .flow-connector.done {
+            background: #34d399;
+        }
+
+        .branch-row-wrap {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            padding-bottom: 4px;
+        }
+
+        .branch-container {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .branch-top-line {
+            height: 2px;
+            background: rgba(120,190,230,.25);
+            margin: 0 68px;
+        }
+
+        .branch-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            padding-top: 0;
+        }
+
+        .branch-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stem {
+            width: 2px;
+            height: 16px;
+            background: rgba(120,190,230,.25);
+        }
+
+        .stem.active {
+            background: #00b4d8;
+        }
+
+        .stem.done {
+            background: #34d399;
+        }
+
+        /* ---- End parallel flow layout ---- */
 
         .glass-card {
             padding: 22px;
@@ -585,40 +643,92 @@ def compute_pipeline_status(
     return status
 
 
+def _connector_class(status):
+    if status == "done":
+        return "done"
+    if status == "active":
+        return "active"
+    return ""
+
+
 def render_pipeline_html(stage_status):
     """
     HTML is used ONLY for the pipeline visualization.
+
+    Rendered as a parallel flow diagram: Planner -> GIS -> a fan-out row of
+    specialist agents that run concurrently -> Final Assessment. This
+    mirrors how LangGraph actually executes the specialist branches (in
+    parallel) instead of showing them as one long sequential chain.
     The final result itself uses native Streamlit components, so raw HTML
     cannot accidentally appear as visible text in the assessment.
     """
 
-    nodes = []
-
-    for index, (node_id, icon, label) in enumerate(PIPELINE_DEFS):
+    def node_html(node_id, icon, label):
         current = stage_status.get(node_id, "pending")
 
-        nodes.append(
-            f"""
-            <div class="pipe-node {current}">
-                <div class="pipe-icon">{icon}</div>
-                <div class="pipe-name">{label}</div>
-                <div class="pipe-state">{STAGE_LABELS[current]}</div>
-            </div>
-            """
+        return (
+            f'<div class="flow-node {current}">'
+            f'<div class="pipe-icon">{icon}</div>'
+            f'<div class="pipe-name">{label}</div>'
+            f'<div class="pipe-state">{STAGE_LABELS[current]}</div>'
+            f'</div>'
         )
 
-        if index < len(PIPELINE_DEFS) - 1:
-            nodes.append(
-                '<div class="pipe-arrow">➜</div>'
-            )
+    def connector_html(status):
+        return f'<div class="flow-connector {_connector_class(status)}"></div>'
+
+    planner_id, planner_icon, planner_label = PIPELINE_DEFS[0]
+    gis_id, gis_icon, gis_label = PIPELINE_DEFS[1]
+    recommendation_id, rec_icon, rec_label = PIPELINE_DEFS[-1]
+    branch_defs = PIPELINE_DEFS[2:-1]
+
+    gis_status = stage_status.get(gis_id, "pending")
+    recommendation_status = stage_status.get(recommendation_id, "pending")
+
+    branch_statuses = [
+        stage_status.get(node_id, "pending") for node_id, _, _ in branch_defs
+    ]
+
+    if branch_statuses and all(status == "done" for status in branch_statuses):
+        branch_overall_status = "done"
+    elif any(status in ("done", "active") for status in branch_statuses):
+        branch_overall_status = "active"
+    else:
+        branch_overall_status = "pending"
+
+    branch_items = []
+
+    for node_id, icon, label in branch_defs:
+        stem_status = stage_status.get(node_id, "pending")
+
+        branch_items.append(
+            f'<div class="branch-item">'
+            f'<div class="stem {_connector_class(stem_status)}"></div>'
+            f'{node_html(node_id, icon, label)}'
+            f'</div>'
+        )
+
+    branch_row_html = (
+        '<div class="branch-row-wrap">'
+        '<div class="branch-container">'
+        '<div class="branch-top-line"></div>'
+        '<div class="branch-row">'
+        + "".join(branch_items)
+        + "</div></div></div>"
+    )
 
     return (
         '<div class="pipeline-shell">'
-        '<div class="pipeline-caption">LIVE PIPELINE EXECUTION</div>'
-        '<div class="pipe-scroll">'
-        '<div class="pipe-row">'
-        + "".join(nodes)
-        + "</div></div></div>"
+        '<div class="pipeline-caption">PARALLEL PIPELINE EXECUTION</div>'
+        '<div class="pipeline-flow">'
+        + node_html(planner_id, planner_icon, planner_label)
+        + connector_html(gis_status)
+        + node_html(gis_id, gis_icon, gis_label)
+        + connector_html(branch_overall_status)
+        + branch_row_html
+        + connector_html(recommendation_status)
+        + node_html(recommendation_id, rec_icon, rec_label)
+        + "</div></div>"
     )
 
 
