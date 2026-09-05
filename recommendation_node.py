@@ -1,6 +1,8 @@
 import json
 import os
+import random
 import re
+import time
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -24,7 +26,7 @@ recommendation_llm = ChatGoogleGenerativeAI(
     ),
     temperature=0,
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    max_retries=2,
+    max_retries=0,  # retries are handled by _invoke_with_retry below
 )
 
 
@@ -207,6 +209,65 @@ MAX_COMPACT_DEPTH = 5
 MAX_AGENT_DATA_CHARS = 30000
 MAX_RISK_CHARS = 5000
 MAX_QUESTION_CHARS = 3000
+
+
+# =========================================================
+# RETRY WRAPPER FOR TRANSIENT GEMINI ERRORS
+# =========================================================
+
+def _is_transient_error(error):
+    """
+    Detects transient/overload-style errors by message text so
+    this does not depend on importing specific google.api_core
+    exception classes (which can differ across library versions
+    and break the module import entirely).
+    """
+
+    text = str(error)
+
+    return (
+        "503" in text
+        or "UNAVAILABLE" in text
+        or "429" in text
+        or "RESOURCE_EXHAUSTED" in text
+        or "overloaded" in text.lower()
+    )
+
+
+def _invoke_with_retry(llm, messages, max_attempts=4, base_delay=1.0):
+    """
+    Retries the Gemini call on transient 503/429-style errors with
+    exponential backoff + jitter. Non-transient errors are raised
+    immediately.
+    """
+
+    last_error = None
+
+    for attempt in range(1, max_attempts + 1):
+
+        try:
+            return llm.invoke(messages)
+
+        except Exception as error:
+
+            if not _is_transient_error(error):
+                raise
+
+            last_error = error
+
+        if attempt < max_attempts:
+
+            delay = base_delay * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+
+            print(
+                "[recommendation_node] transient error on attempt "
+                f"{attempt}/{max_attempts}, retrying in {delay:.1f}s: "
+                f"{last_error}"
+            )
+
+            time.sleep(delay)
+
+    raise last_error
 
 
 # =========================================================
@@ -876,13 +937,12 @@ def recommendation_node(state):
         )
 
         # -------------------------------------------------
-        # Gemini call
+        # Gemini call (with retry on transient errors)
         # -------------------------------------------------
 
-        response = (
-            recommendation_llm.invoke(
-                messages
-            )
+        response = _invoke_with_retry(
+            recommendation_llm,
+            messages,
         )
 
         content = _clean_model_content(
