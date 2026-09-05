@@ -6,7 +6,14 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-from graph import marine_graph
+try:
+    from graph import marine_graph
+    BACKEND_STATUS = "online"
+    BACKEND_ERROR = None
+except Exception as _import_error:
+    marine_graph = None
+    BACKEND_STATUS = "offline"
+    BACKEND_ERROR = str(_import_error)
 
 
 # ============================================================
@@ -90,12 +97,64 @@ RISK_COLORS = {
     "UNKNOWN": "⚪",
 }
 
+# RGBA fill colors for the results map marker, keyed by risk level.
+RISK_MAP_COLORS = {
+    "LOW": [52, 211, 153, 220],
+    "MODERATE": [250, 204, 21, 220],
+    "HIGH": [251, 146, 60, 220],
+    "SEVERE": [248, 113, 113, 220],
+    "UNKNOWN": [148, 163, 184, 220],
+}
+
 SUGGESTED_QUESTIONS = [
     "Where is the nearest Potential Fishing Zone today?",
     "Is it safe to venture into the sea tomorrow morning?",
     "What are the tide, weather, and sea conditions near my location?",
     "Are there any cyclone or lightning alerts nearby?",
 ]
+
+# Defensive field-name aliases per domain, used only to *display* parsed
+# values when present. Nothing here invents data — if none of the aliases
+# for a label exist in the agent's payload, the field is shown as
+# unavailable rather than guessed at.
+FIELD_SPECS = {
+    "weather": [
+        ("Wind speed", ["wind_speed", "windSpeed", "wind_speed_kmph", "windspeed"]),
+        ("Wind direction", ["wind_direction", "windDirection", "wind_dir"]),
+        ("Gusts", ["wind_gust", "wind_gusts", "gusts", "gust_speed"]),
+        ("Precipitation", ["precipitation", "precipitation_probability", "precip_probability", "rain_probability"]),
+    ],
+    "ocean": [
+        ("Wave height", ["wave_height", "waveHeight", "significant_wave_height"]),
+        ("Swell", ["swell", "swell_height", "swell_period"]),
+        ("Currents", ["current_speed", "currents", "ocean_current", "current_direction"]),
+    ],
+    "tide": [
+        ("Next high tide", ["next_high_tide", "next_high", "high_tide_time"]),
+        ("Next low tide", ["next_low_tide", "next_low", "low_tide_time"]),
+        ("Current level", ["tide_level", "current_level", "tide_height"]),
+    ],
+    "cyclone": [
+        ("Status", ["active", "cyclone_active", "status"]),
+        ("Distance", ["distance", "distance_km", "cyclone_distance"]),
+        ("Category", ["category", "cyclone_category", "intensity"]),
+    ],
+    "ecosystem": [
+        ("Chlorophyll", ["chlorophyll", "chlorophyll_a", "chl"]),
+        ("Sea surface temperature", ["sst", "sea_surface_temperature", "surface_temperature"]),
+    ],
+    "pfz": [
+        ("Nearest zone", ["nearest_zone", "zone_name", "pfz_zone"]),
+        ("Distance", ["distance", "distance_km", "distance_from_shore"]),
+        ("Sector", ["sector", "fishing_sector"]),
+    ],
+    "gis": [
+        ("Distance from coast", ["distance_from_coast", "coast_distance", "distance_to_shore"]),
+        ("Depth", ["depth", "water_depth", "bathymetry"]),
+        ("Nearest port", ["nearest_port", "port_name", "closest_port"]),
+        ("Protected/restricted zone", ["mpa", "protected_area", "restricted_zone", "is_restricted"]),
+    ],
+}
 
 
 # ============================================================
@@ -162,6 +221,28 @@ st.markdown(
             border: 1px solid rgba(0,180,216,.25);
             color: #6ee7ff;
             font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-pill-online {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(52,211,153,.12);
+            border: 1px solid rgba(52,211,153,.35);
+            color: #6ee7c4;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-pill-offline {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(248,113,113,.12);
+            border: 1px solid rgba(248,113,113,.35);
+            color: #fca5a5;
+            font-size: 12px;
             font-weight: 600;
         }
 
@@ -384,6 +465,86 @@ st.markdown(
             color: #fecaca;
         }
 
+        /* ---- Alerts strip ---- */
+
+        .alert-banner {
+            padding: 14px 18px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-banner.severe {
+            background: rgba(127,29,29,.40);
+            border: 1px solid rgba(248,113,113,.45);
+            color: #ffd7d7;
+        }
+
+        .alert-banner.high {
+            background: rgba(120,53,15,.40);
+            border: 1px solid rgba(251,146,60,.45);
+            color: #ffe3c7;
+        }
+
+        /* ---- Field rows (parsed per-agent values) ---- */
+
+        .field-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(120,190,230,.10);
+            font-size: 13px;
+        }
+
+        .field-row:last-child {
+            border-bottom: none;
+        }
+
+        .field-label {
+            color: #9bb4d0;
+        }
+
+        .field-value {
+            color: #eaf7ff;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .badge-unavailable {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 999px;
+            background: rgba(148,163,184,.14);
+            border: 1px solid rgba(148,163,184,.30);
+            color: #93a6bd;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* ---- Risk signals panel ---- */
+
+        .signal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(120,190,230,.10);
+        }
+
+        .signal-row:last-child {
+            border-bottom: none;
+        }
+
+        .signal-factor {
+            color: #dcecff;
+            font-size: 14px;
+        }
+
         .footer {
             text-align: center;
             color: #526b84;
@@ -453,6 +614,19 @@ def _queue_question(text):
 with st.sidebar:
     st.markdown("## 🌊 ORCA")
     st.caption("Marine Intelligence Platform")
+
+    if BACKEND_STATUS == "online":
+        st.markdown(
+            '<div class="status-pill-online">● BACKEND CONNECTED</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="status-pill-offline">● BACKEND OFFLINE</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"Import error: {BACKEND_ERROR}")
+
     st.divider()
 
     st.markdown("### 📍 Target Location")
@@ -774,6 +948,11 @@ def run_marine_graph(initial_state, pipeline_slot):
     is shown to the user instead of running the entire graph a second time.
     """
 
+    if marine_graph is None:
+        raise RuntimeError(
+            "Marine graph backend failed to load: " + str(BACKEND_ERROR)
+        )
+
     final_state = dict(initial_state)
     completed_nodes = set()
 
@@ -878,11 +1057,198 @@ def _json_safe(data):
         return {"raw": str(data)}
 
 
+def _field(data, aliases):
+    """
+    Defensively look up the first present, non-empty value among a list
+    of candidate key names in a dict. Never invents a value — returns
+    None if nothing matches, so the caller can show "not available"
+    instead of guessing.
+    """
+
+    if not isinstance(data, dict):
+        return None
+
+    for alias in aliases:
+        if alias in data:
+            value = data[alias]
+
+            if value is not None and value != "" and value != []:
+                return value
+
+    return None
+
+
+def _parsed_domain_fields(agent_key, data):
+    """
+    Returns a list of (label, value_or_None) for a given agent's data,
+    using the alias table in FIELD_SPECS. Purely additive/display-only —
+    the underlying raw JSON is always still available separately.
+    """
+
+    spec = FIELD_SPECS.get(agent_key, [])
+
+    return [
+        (label, _field(data, aliases))
+        for label, aliases in spec
+    ]
+
+
+def _field_rows_html(parsed_fields):
+    rows = []
+
+    for label, value in parsed_fields:
+        if value is None:
+            value_html = '<span class="badge-unavailable">NOT AVAILABLE</span>'
+        else:
+            value_html = str(value)
+
+        rows.append(
+            f'<div class="field-row">'
+            f'<span class="field-label">{label}</span>'
+            f'<span class="field-value">{value_html}</span>'
+            f'</div>'
+        )
+
+    return "".join(rows)
+
+
+def render_alerts_strip(recommendation, agent_findings):
+    """
+    A persistent, hard-to-miss banner for severe conditions — separate
+    from the expandable Key Findings / Safety Advice sections below, so a
+    judge or user can't miss an active cyclone or a HIGH/SEVERE risk level
+    by having to open something first.
+    """
+
+    risk_level = str(recommendation.get("risk_level", "UNKNOWN")).upper().strip()
+
+    messages = []
+
+    if risk_level == "SEVERE":
+        messages.append(("severe", "⚠️ SEVERE risk conditions reported for this location."))
+    elif risk_level == "HIGH":
+        messages.append(("high", "⚠️ HIGH risk conditions reported for this location."))
+
+    cyclone_data = (agent_findings or {}).get("cyclone")
+    cyclone_status = _field(cyclone_data, ["active", "cyclone_active", "status"])
+
+    if isinstance(cyclone_status, str) and cyclone_status.strip().lower() in {
+        "active",
+        "true",
+        "yes",
+    }:
+        messages.append(("severe", "🌀 Active cyclone indicated by the cyclone agent."))
+    elif cyclone_status is True:
+        messages.append(("severe", "🌀 Active cyclone indicated by the cyclone agent."))
+
+    for severity, text in messages:
+        st.markdown(
+            f'<div class="alert-banner {severity}">{text}</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_results_map(latitude, longitude, risk_level):
+    """
+    Renders the query point on a map colored by the resulting risk level,
+    so the result panel has a real geospatial visual instead of only the
+    lat/lon text already shown alongside it.
+    """
+
+    color = RISK_MAP_COLORS.get(risk_level, RISK_MAP_COLORS["UNKNOWN"])
+
+    point_df = pd.DataFrame(
+        {
+            "lat": [latitude],
+            "lon": [longitude],
+            "risk": [risk_level],
+        }
+    )
+
+    st.markdown(
+        '<div class="section-title">🗺️ Result Location</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(
+                latitude=float(latitude),
+                longitude=float(longitude),
+                zoom=6,
+                pitch=0,
+                bearing=0,
+            ),
+            layers=[
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=point_df,
+                    get_position="[lon, lat]",
+                    get_fill_color=color,
+                    get_radius=2200,
+                    pickable=True,
+                ),
+            ],
+            tooltip={"text": "Risk: {risk}\nLat: {lat}\nLon: {lon}"},
+        ),
+        height=260,
+        use_container_width=True,
+    )
+
+
+def render_risk_signals(result):
+    """
+    Shows the deterministic rule-based risk signals separately from the
+    LLM's synthesized recommendation, so both the "explainable" signal
+    and the narrative explanation are visible — not just the narrative.
+    Only renders if risk_signals data is actually present; never
+    fabricates a signal that wasn't returned.
+    """
+
+    risk_signals = result.get("risk_signals")
+
+    if not risk_signals:
+        return
+
+    st.markdown(
+        '<div class="section-title">📊 Risk Signals (rule-based)</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(border=True):
+        if isinstance(risk_signals, dict):
+            rows = []
+
+            for factor, severity in risk_signals.items():
+                factor_label = str(factor).replace("_", " ").title()
+                rows.append(
+                    f'<div class="signal-row">'
+                    f'<span class="signal-factor">{factor_label}</span>'
+                    f'<span class="field-value">{severity}</span>'
+                    f'</div>'
+                )
+
+            st.markdown("".join(rows), unsafe_allow_html=True)
+
+        elif isinstance(risk_signals, list):
+            for item in risk_signals:
+                st.write(f"• {item}")
+
+        else:
+            st.write(str(risk_signals))
+
+
 def render_agent_outputs(recommendation):
     """
-    Show the raw output of every specialist agent, so the user (and
-    whoever is debugging the pipeline) can see exactly what each agent
-    returned instead of only the LLM's synthesized summary.
+    Show the output of every specialist agent, so the user (and whoever is
+    debugging the pipeline) can see exactly what each agent returned
+    instead of only the LLM's synthesized summary.
+
+    Each card leads with parsed, human-readable fields (where the
+    underlying data has a recognizable key for them) and keeps the full
+    raw JSON available underneath in a nested "View raw JSON" expander —
+    nothing about the original raw data view is removed.
 
     Reads from recommendation["agent_findings"], which recommendation_node.py
     always populates with the full, uncompacted per-agent data (or None
@@ -921,17 +1287,29 @@ def render_agent_outputs(recommendation):
                     "or did not return any data."
                 )
             else:
-                st.json(_json_safe(data), expanded=False)
+                parsed_fields = _parsed_domain_fields(key, data)
+
+                if parsed_fields:
+                    st.markdown(
+                        _field_rows_html(parsed_fields),
+                        unsafe_allow_html=True,
+                    )
+
+                with st.expander("View raw JSON", expanded=False):
+                    st.json(_json_safe(data), expanded=False)
 
 
 def render_final_result(result, latitude, longitude):
     recommendation = _normalize_recommendation(result)
+    agent_findings = recommendation.get("agent_findings")
 
     risk_level = str(
         recommendation.get("risk_level", "UNKNOWN")
     ).upper().strip()
 
     risk_icon = RISK_COLORS.get(risk_level, "⚪")
+
+    render_alerts_strip(recommendation, agent_findings)
 
     st.markdown(
         '<div class="section-title">🎯 Marine Intelligence Result</div>',
@@ -954,6 +1332,10 @@ def render_final_result(result, latitude, longitude):
             st.markdown(
                 f"### {latitude:.3f}, {longitude:.3f}"
             )
+
+    render_results_map(latitude, longitude, risk_level)
+
+    render_risk_signals(result)
 
     st.markdown(
         '<div class="section-title">🌊 Final Assessment</div>',
