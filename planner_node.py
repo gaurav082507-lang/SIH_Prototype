@@ -30,7 +30,7 @@ load_dotenv()
 # ============================================================
 
 planner_llm = ChatGoogleGenerativeAI(
-    model=os.getenv("GROQ_MODEL_PLANNER", "gemini-2.0-flash-lite"),
+    model=os.getenv("GROQ_MODEL_PLANNER", "gemini-3.5-flash-lite"),
     temperature=0,
     google_api_key=os.getenv("GOOGLE_API_KEY"),
     max_retries=2,
