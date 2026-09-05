@@ -22,7 +22,7 @@ print("FILE:", __file__)
 recommendation_llm = ChatGoogleGenerativeAI(
     model=os.getenv(
         "GEMINI_MODEL_RECOMMENDATION",
-        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
     ),
     temperature=0,
     google_api_key=os.getenv("GOOGLE_API_KEY"),
@@ -163,6 +163,20 @@ safety_advice:
 
 Do NOT include agent_findings in the JSON returned by the model.
 
+RESPONSE LANGUAGE:
+- Write the text of "summary", "recommendation", "key_findings", and
+  "safety_advice" in {response_language}.
+- Do NOT translate the JSON field names (keys) — they must stay exactly
+  as specified: summary, risk_level, recommendation, key_findings,
+  safety_advice.
+- The "risk_level" VALUE must always remain exactly one of the English
+  words LOW, MODERATE, HIGH, SEVERE, regardless of {response_language} —
+  never translate or transliterate this value.
+- Keep numbers, units, coordinates, and proper nouns (place names) as-is;
+  do not translate or convert them.
+- If {response_language} is English, write normally in English as
+  instructed above.
+
 NO-DATA RESPONSE:
 If and ONLY if every agent has no meaningful data, return:
 
@@ -186,13 +200,17 @@ Remember:
 USER QUESTION:
 {user_question}
 
+RESPONSE LANGUAGE: {response_language}
+
 RULE-BASED RISK:
 {risk_signals}
 
 MARINE AGENT DATA:
 {agent_data}
 
-Return the final JSON object now.
+Return the final JSON object now, with summary/recommendation/key_findings/
+safety_advice text written in {response_language} (risk_level stays in
+English as instructed above).
 """,
         ),
     ]
