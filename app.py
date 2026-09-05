@@ -7,17 +7,6 @@ import pydeck as pdk
 import streamlit as st
 
 try:
-    import folium
-    from streamlit_folium import st_folium
-    MAP_CLICK_AVAILABLE = True
-    MAP_CLICK_IMPORT_ERROR = None
-except Exception as _map_click_import_error:
-    folium = None
-    st_folium = None
-    MAP_CLICK_AVAILABLE = False
-    MAP_CLICK_IMPORT_ERROR = str(_map_click_import_error)
-
-try:
     from graph import marine_graph
     BACKEND_STATUS = "online"
     BACKEND_ERROR = None
@@ -708,50 +697,6 @@ with st.sidebar:
         height=180,
         use_container_width=True,
     )
-
-    with st.expander("🖱️ Or click a spot on the map", expanded=False):
-        if not MAP_CLICK_AVAILABLE:
-            st.caption(
-                "Click-to-select needs the 'folium' and 'streamlit-folium' "
-                "packages. Install them with: "
-                "pip install folium streamlit-folium"
-            )
-        else:
-            click_map = folium.Map(
-                location=[float(latitude), float(longitude)],
-                zoom_start=5,
-                tiles="CartoDB dark_matter",
-            )
-
-            folium.Marker(
-                [float(latitude), float(longitude)],
-                tooltip="Selected location",
-                icon=folium.Icon(color="cadetblue", icon="anchor", prefix="fa"),
-            ).add_to(click_map)
-
-            map_click = st_folium(
-                click_map,
-                height=260,
-                use_container_width=True,
-                key="location_click_map",
-            )
-
-            st.caption("Click anywhere on the map to set latitude/longitude.")
-
-            clicked_point = (map_click or {}).get("last_clicked")
-
-            if clicked_point:
-                clicked_lat = clicked_point.get("lat")
-                clicked_lon = clicked_point.get("lng")
-
-                if clicked_lat is not None and clicked_lon is not None and (
-                    round(clicked_lat, 6) != round(float(latitude), 6)
-                    or round(clicked_lon, 6) != round(float(longitude), 6)
-                ):
-                    st.session_state.latitude = clicked_lat
-                    st.session_state.longitude = clicked_lon
-                    st.session_state.location_preset = "Custom"
-                    st.rerun()
 
     st.divider()
     st.markdown("### 🤖 Agent Architecture")
