@@ -13,6 +13,8 @@ langchain_google_genai
 openmeteo-requests
 requests-cache
 retry-requests
+folium
+streamlit-folium
 
 searoute
 astral
