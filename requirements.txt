@@ -15,7 +15,7 @@ requests-cache
 retry-requests
 folium
 streamlit-folium
-
+pydeck
 searoute
 astral
 pytz
