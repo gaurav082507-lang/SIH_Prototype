@@ -2,7 +2,7 @@ import json
 import time
 import traceback
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
@@ -17,6 +17,18 @@ from graph import marine_graph
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
+
+# Your repository structure is:
+#
+# src/
+# ├── server.py
+# ├── static/
+# │   └── index.html
+# ├── graph.py
+# ├── schemas.py
+# └── ...
+#
+# Therefore static files live here:
 STATIC_DIR = BASE_DIR / "static"
 INDEX_FILE = STATIC_DIR / "index.html"
 
@@ -27,7 +39,10 @@ INDEX_FILE = STATIC_DIR / "index.html"
 
 app = FastAPI(
     title="ORCA Marine Intelligence API",
-    description="Agentic AI platform for ocean, weather, tide, cyclone and ecosystem analysis.",
+    description=(
+        "Agentic AI platform for ocean, weather, tide, "
+        "cyclone and ecosystem analysis."
+    ),
     version="1.0.0",
 )
 
@@ -48,10 +63,34 @@ if STATIC_DIR.exists():
 # REQUEST SCHEMA
 # ============================================================
 
+# IMPORTANT:
+# Do NOT import AskRequest from schemas.py.
+# Your current schemas.py does not contain AskRequest.
+#
+# The frontend sends:
+#
+# {
+#     "latitude": 19.076,
+#     "longitude": 72.8777,
+#     "question": "Is it safe to venture into the sea tomorrow morning?"
+# }
+
 class AskRequest(BaseModel):
-    latitude: float = Field(..., description="Latitude of the requested location")
-    longitude: float = Field(..., description="Longitude of the requested location")
-    question: str = Field(..., min_length=1, description="User's marine-related question")
+    latitude: float = Field(
+        ...,
+        description="Latitude of the requested location",
+    )
+
+    longitude: float = Field(
+        ...,
+        description="Longitude of the requested location",
+    )
+
+    question: str = Field(
+        ...,
+        min_length=1,
+        description="User's marine-related question",
+    )
 
 
 # ============================================================
@@ -61,28 +100,45 @@ class AskRequest(BaseModel):
 @app.get("/")
 def home():
     """
-    Serve the frontend index.html.
+    Serve the ORCAWA frontend.
 
-    Project structure expected:
+    Expected structure:
 
     src/
     ├── server.py
-    ├── static/
-    │   └── index.html
-    └── ...
+    └── static/
+        └── index.html
     """
 
-    if not INDEX_FILE.exists():
-        return {
-            "status": "error",
-            "message": "index.html not found",
-            "expected_path": str(INDEX_FILE),
-        }
+    # Primary location
+    if INDEX_FILE.exists():
+        return FileResponse(
+            str(INDEX_FILE),
+            media_type="text/html",
+        )
 
-    return FileResponse(
-        str(INDEX_FILE),
-        media_type="text/html",
-    )
+    # Extra fallback:
+    # This makes deployment more tolerant if index.html
+    # accidentally exists beside server.py.
+    fallback_index = BASE_DIR / "index.html"
+
+    if fallback_index.exists():
+        return FileResponse(
+            str(fallback_index),
+            media_type="text/html",
+        )
+
+    return {
+        "status": "error",
+        "message": "index.html not found",
+        "expected_paths": [
+            str(INDEX_FILE),
+            str(fallback_index),
+        ],
+        "base_dir": str(BASE_DIR),
+        "static_dir": str(STATIC_DIR),
+        "static_exists": STATIC_DIR.exists(),
+    }
 
 
 @app.get("/health")
@@ -90,91 +146,47 @@ def health():
     """
     Health check endpoint for Render.
     """
+
     return {
         "status": "ok",
         "service": "ORCA Marine Intelligence API",
     }
 
 
+@app.get("/api")
+def api_info():
+    """
+    API information.
+    """
+
+    return {
+        "name": "ORCA Marine Intelligence API",
+        "version": "1.0.0",
+        "endpoints": {
+            "frontend": "/",
+            "health": "/health",
+            "ask": "/api/ask",
+            "stream": "/api/ask/stream",
+        },
+    }
+
+
 # ============================================================
-# HELPER FUNCTIONS
+# JSON / SERIALIZATION HELPERS
 # ============================================================
-
-def _sse(event: dict[str, Any]) -> str:
-    """
-    Convert a Python dictionary into a Server-Sent Event.
-    """
-
-    return f"data: {json.dumps(event, default=str)}\n\n"
-
-
-def _parse_plan(state: dict[str, Any]) -> Any:
-    """
-    Safely extract the planner output from the LangGraph state.
-
-    Different versions of the planner may store the plan under
-    different keys, so this function checks several possibilities.
-    """
-
-    possible_keys = [
-        "plan",
-        "planner_output",
-        "planner_result",
-        "planning",
-        "steps",
-    ]
-
-    for key in possible_keys:
-        value = state.get(key)
-
-        if value is not None:
-            # If already a dictionary/list, return it directly.
-            if isinstance(value, (dict, list)):
-                return value
-
-            # If the planner returned JSON as a string, parse it.
-            if isinstance(value, str):
-                cleaned = value.strip()
-
-                if not cleaned:
-                    continue
-
-                try:
-                    return json.loads(cleaned)
-                except json.JSONDecodeError:
-                    return cleaned
-
-    return None
-
-
-def _normalize_recommendation(state: dict[str, Any]) -> Any:
-    """
-    Safely extract the final recommendation from the graph state.
-    """
-
-    possible_keys = [
-        "recommendation",
-        "recommendations",
-        "final_recommendation",
-        "recommendation_output",
-        "recommendation_result",
-    ]
-
-    for key in possible_keys:
-        value = state.get(key)
-
-        if value is not None:
-            return value
-
-    return None
-
 
 def _clean_for_json(value: Any) -> Any:
     """
-    Convert potentially complex objects into JSON-safe values.
+    Convert potentially complex Python objects into
+    JSON-safe values.
 
-    This prevents serialization errors if a graph node returns
-    objects such as Pydantic models or other custom classes.
+    Handles:
+    - dict
+    - list
+    - tuple
+    - Pydantic models
+    - primitive values
+    - custom objects
     """
 
     if value is None:
@@ -185,8 +197,8 @@ def _clean_for_json(value: Any) -> Any:
 
     if isinstance(value, dict):
         return {
-            str(k): _clean_for_json(v)
-            for k, v in value.items()
+            str(key): _clean_for_json(item)
+            for key, item in value.items()
         }
 
     if isinstance(value, list):
@@ -201,21 +213,135 @@ def _clean_for_json(value: Any) -> Any:
             for item in value
         ]
 
-    # Pydantic model
+    # Pydantic v2
     if hasattr(value, "model_dump"):
         try:
-            return _clean_for_json(value.model_dump())
+            return _clean_for_json(
+                value.model_dump()
+            )
         except Exception:
             pass
 
-    # Older Pydantic versions
+    # Pydantic v1
     if hasattr(value, "dict"):
         try:
-            return _clean_for_json(value.dict())
+            return _clean_for_json(
+                value.dict()
+            )
         except Exception:
             pass
 
     return str(value)
+
+
+def _sse(event: dict[str, Any]) -> str:
+    """
+    Convert a Python dictionary into a Server-Sent Event.
+
+    Example:
+
+    data: {"type":"node_done","node":"planner"}
+
+    """
+
+    safe_event = _clean_for_json(event)
+
+    return (
+        f"data: {json.dumps(safe_event, ensure_ascii=False)}"
+        "\n\n"
+    )
+
+
+# ============================================================
+# STATE EXTRACTION HELPERS
+# ============================================================
+
+def _parse_plan(state: dict[str, Any]) -> Any:
+    """
+    Safely extract planner output.
+
+    Different versions of the planner may store the plan
+    under different keys.
+    """
+
+    possible_keys = [
+        "plan",
+        "planner_output",
+        "planner_result",
+        "planning",
+        "steps",
+    ]
+
+    for key in possible_keys:
+
+        value = state.get(key)
+
+        if value is None:
+            continue
+
+        # Already structured
+        if isinstance(value, (dict, list)):
+            return value
+
+        # JSON string
+        if isinstance(value, str):
+
+            cleaned = value.strip()
+
+            if not cleaned:
+                continue
+
+            try:
+                return json.loads(cleaned)
+
+            except json.JSONDecodeError:
+                return cleaned
+
+    return None
+
+
+def _normalize_recommendation(
+    state: dict[str, Any],
+) -> Any:
+    """
+    Safely extract final recommendation.
+    """
+
+    possible_keys = [
+        "recommendation",
+        "recommendations",
+        "final_recommendation",
+        "recommendation_output",
+        "recommendation_result",
+    ]
+
+    for key in possible_keys:
+
+        value = state.get(key)
+
+        if value is not None:
+            return value
+
+    return None
+
+
+# ============================================================
+# INITIAL GRAPH STATE
+# ============================================================
+
+def _build_initial_state(
+    payload: AskRequest,
+) -> dict[str, Any]:
+    """
+    Build the state expected by the marine graph.
+    """
+
+    return {
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "user_question": payload.question.strip(),
+        "status": "STARTED",
+    }
 
 
 # ============================================================
@@ -225,42 +351,64 @@ def _clean_for_json(value: Any) -> Any:
 @app.post("/api/ask")
 def ask(payload: AskRequest):
     """
-    Execute the complete marine LangGraph and return the final result.
+    Execute the complete marine LangGraph and return
+    the final result.
     """
 
-    initial_state: dict[str, Any] = {
-        "latitude": payload.latitude,
-        "longitude": payload.longitude,
-        "user_question": payload.question.strip(),
-        "status": "STARTED",
-    }
+    initial_state = _build_initial_state(payload)
 
     started = time.monotonic()
 
     try:
 
-        final_state = marine_graph.invoke(initial_state)
+        # ----------------------------------------------------
+        # Execute graph
+        # ----------------------------------------------------
+
+        final_state = marine_graph.invoke(
+            initial_state
+        )
+
+        # ----------------------------------------------------
+        # Safety check
+        # ----------------------------------------------------
 
         if not isinstance(final_state, dict):
             final_state = dict(initial_state)
+
+        # ----------------------------------------------------
+        # Duration
+        # ----------------------------------------------------
 
         duration = round(
             time.monotonic() - started,
             2,
         )
 
+        # ----------------------------------------------------
+        # Response
+        # ----------------------------------------------------
+
         return {
             "status": "SUCCESS",
+
             "latitude": payload.latitude,
             "longitude": payload.longitude,
+
             "question": payload.question,
+
             "plan": _clean_for_json(
                 _parse_plan(final_state)
             ),
+
             "recommendation": _clean_for_json(
                 _normalize_recommendation(final_state)
             ),
-            "state": _clean_for_json(final_state),
+
+            "state": _clean_for_json(
+                final_state
+            ),
+
             "duration_seconds": duration,
         }
 
@@ -270,9 +418,12 @@ def ask(payload: AskRequest):
 
         return {
             "status": "ERROR",
+
             "message": str(exc),
+
             "latitude": payload.latitude,
             "longitude": payload.longitude,
+
             "question": payload.question,
         }
 
@@ -281,39 +432,71 @@ def ask(payload: AskRequest):
 # STREAMING GRAPH EXECUTION
 # ============================================================
 
-def _stream_ask_events(payload: AskRequest):
+def _stream_ask_events(
+    payload: AskRequest,
+) -> Iterator[str]:
     """
-    Stream LangGraph node execution using Server-Sent Events.
+    Execute LangGraph using stream_mode='updates'
+    and convert every completed node into an SSE event.
+
+    The frontend expects events like:
+
+    {
+        "type": "node_done",
+        "node": "planner"
+    }
+
+    and finally:
+
+    {
+        "type": "final",
+        ...
+    }
     """
 
-    initial_state: dict[str, Any] = {
-        "latitude": payload.latitude,
-        "longitude": payload.longitude,
-        "user_question": payload.question.strip(),
-        "status": "STARTED",
-    }
+    initial_state = _build_initial_state(payload)
 
     started = time.monotonic()
 
-    final_state: dict[str, Any] = dict(initial_state)
+    final_state: dict[str, Any] = dict(
+        initial_state
+    )
 
     completed_nodes: list[str] = []
+
+    final_sent = False
+
+    # --------------------------------------------------------
+    # Tell frontend that stream has started
+    # --------------------------------------------------------
+
+    yield _sse({
+        "type": "stream_started",
+        "status": "STARTED",
+    })
 
     try:
 
         # ----------------------------------------------------
-        # Run LangGraph in streaming mode
+        # Stream LangGraph
         # ----------------------------------------------------
 
-        for step_output in marine_graph.stream(
+        stream = marine_graph.stream(
             initial_state,
             stream_mode="updates",
-        ):
+        )
+
+        for step_output in stream:
+
+            # ------------------------------------------------
+            # Ignore unexpected output
+            # ------------------------------------------------
 
             if not isinstance(step_output, dict):
                 continue
 
-            # Each update normally looks like:
+            # ------------------------------------------------
+            # LangGraph update usually looks like:
             #
             # {
             #     "planner": {
@@ -321,23 +504,35 @@ def _stream_ask_events(payload: AskRequest):
             #     }
             # }
             #
-            # or another node name.
+            # or:
+            #
+            # {
+            #     "weather": {
+            #         ...
+            #     }
+            # }
+            # ------------------------------------------------
 
             for node_name, node_update in step_output.items():
 
                 node_name = str(node_name)
 
-                completed_nodes.append(node_name)
+                # Avoid duplicate completion events
+                if node_name not in completed_nodes:
+                    completed_nodes.append(node_name)
 
                 # ------------------------------------------------
-                # Update our final state
+                # Merge graph state
                 # ------------------------------------------------
 
                 if isinstance(node_update, dict):
-                    final_state.update(node_update)
+
+                    final_state.update(
+                        node_update
+                    )
 
                 # ------------------------------------------------
-                # Send node completion event
+                # Build node completion event
                 # ------------------------------------------------
 
                 event: dict[str, Any] = {
@@ -346,7 +541,7 @@ def _stream_ask_events(payload: AskRequest):
                 }
 
                 # ------------------------------------------------
-                # If planner completed, send its plan
+                # Planner event
                 # ------------------------------------------------
 
                 if node_name == "planner":
@@ -355,11 +550,27 @@ def _stream_ask_events(payload: AskRequest):
                         _parse_plan(final_state)
                     )
 
+                # ------------------------------------------------
+                # Send event immediately
+                # ------------------------------------------------
+
                 yield _sse(event)
 
-        # ----------------------------------------------------
-        # Graph completed
-        # ----------------------------------------------------
+                # ------------------------------------------------
+                # Small heartbeat event.
+                #
+                # This helps keep the HTTP stream alive on
+                # deployment platforms/proxies.
+                # ------------------------------------------------
+
+                yield _sse({
+                    "type": "heartbeat",
+                    "node": node_name,
+                })
+
+        # ====================================================
+        # GRAPH COMPLETED SUCCESSFULLY
+        # ====================================================
 
         duration = round(
             time.monotonic() - started,
@@ -388,19 +599,38 @@ def _stream_ask_events(payload: AskRequest):
             "duration_seconds": duration,
         }
 
+        final_sent = True
+
         yield _sse(final_event)
 
     except Exception as exc:
 
+        # ----------------------------------------------------
+        # IMPORTANT:
+        # Never allow the generator to silently terminate.
+        # The frontend otherwise displays:
+        #
+        # "The pipeline stream ended without a final result."
+        # ----------------------------------------------------
+
         traceback.print_exc()
 
-        error_event = {
+        duration = round(
+            time.monotonic() - started,
+            2,
+        )
+
+        # Send explicit error event
+        yield _sse({
             "type": "error",
             "status": "ERROR",
             "detail": str(exc),
-        }
+            "completed_nodes": completed_nodes,
+            "duration_seconds": duration,
+        })
 
-        yield _sse(error_event)
+        # Do NOT send another final event after an error.
+        # The frontend already handles the error event.
 
 
 # ============================================================
@@ -409,32 +639,32 @@ def _stream_ask_events(payload: AskRequest):
 
 @app.post("/api/ask/stream")
 def ask_stream(payload: AskRequest):
+    """
+    Streaming endpoint used by the ORCAWA frontend.
+    """
 
     return StreamingResponse(
         _stream_ask_events(payload),
+
         media_type="text/event-stream",
+
         headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
+            # Prevent proxy buffering
             "X-Accel-Buffering": "no",
+
+            # Do not cache stream
+            "Cache-Control": (
+                "no-cache, no-store, "
+                "must-revalidate"
+            ),
+
+            # Keep HTTP connection alive
+            "Connection": "keep-alive",
+
+            # Explicit SSE header
+            "Content-Type": (
+                "text/event-stream; "
+                "charset=utf-8"
+            ),
         },
     )
-
-
-# ============================================================
-# OPTIONAL API INFORMATION
-# ============================================================
-
-@app.get("/api")
-def api_info():
-
-    return {
-        "name": "ORCA Marine Intelligence API",
-        "version": "1.0.0",
-        "endpoints": {
-            "frontend": "/",
-            "health": "/health",
-            "ask": "/api/ask",
-            "stream": "/api/ask/stream",
-        },
-    }
