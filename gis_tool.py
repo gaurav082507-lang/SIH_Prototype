@@ -53,7 +53,7 @@ def fetch_gis_data(latitude: float, longitude: float) -> dict:
     params = {"latitude": latitude, "longitude": longitude}
 
     try:
-        response = requests.get(GIS_API_URL, params=params, timeout=None)
+        response = requests.get(GIS_API_URL, params=params, timeout=60)
     except requests.exceptions.Timeout:
         return _gis_failure(
             "TIMEOUT", f"GIS API did not respond within {REQUEST_TIMEOUT_SECONDS}s"
