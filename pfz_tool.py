@@ -51,7 +51,7 @@ def get_pfz_data(latitude: float, longitude: float) -> dict:
         response = requests.get(
             PFZ_API_URL,
             params=params,
-            timeout=None,
+            timeout=60,
         )
     except requests.exceptions.ConnectionError as exc:
         return _pfz_failure(latitude, longitude, "CONNECTION_ERROR",
