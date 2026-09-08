@@ -6,21 +6,16 @@ uvicorn[standard]
 langgraph
 langchain
 langchain-core
-langchain-groq
-langchain-mistralai
-pydantic
 langchain-google-genai
+pydantic
 python-dotenv
 
 requests
 pandas
 numpy
-global-land-mask
 
 openmeteo-requests
 requests-cache
 retry-requests
 
-searoute
-astral
-pytz
+global-land-mask
