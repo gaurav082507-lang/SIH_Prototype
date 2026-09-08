@@ -477,7 +477,7 @@ DEFAULT_RADIUS_KM = 500
 # is kept only so the (now effectively unreachable) requests.Timeout
 # except branch below still has a value to format into its message if
 # a timeout is ever reintroduced.
-REQUEST_TIMEOUT_SECONDS = 15
+REQUEST_TIMEOUT_SECONDS = 90
 
 
 def fetch_cyclone_data(latitude: float, longitude: float, radius_km: int = DEFAULT_RADIUS_KM) -> dict:
