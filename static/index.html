@@ -216,27 +216,68 @@
   .run-btn:disabled{opacity:0.55; cursor:progress; transform:none;}
   .console-hint{font-size:12px; color:var(--text-faint); margin-top:10px; text-align:center;}
 
-  /* ---------------- Pipeline strip ---------------- */
-  .pipeline{margin-top:22px; display:none;}
-  .pipeline.show{display:block;}
-  .pipeline-caption{
-    font-family:var(--mono); font-size:10.5px; color:var(--text-faint);
-    letter-spacing:0.05em; margin-bottom:12px;
+  /* ---------------- Parallel pipeline flow diagram ---------------- */
+  .flow-section{display:none; padding:6px 0 46px;}
+  .flow-section.show{display:block;}
+  .flow-caption{
+    font-family:var(--mono); font-size:11px; color:var(--brass);
+    letter-spacing:0.08em; text-align:center; margin-bottom:26px;
+    text-transform:uppercase;
   }
-  .pipeline-list{display:flex; flex-direction:column; gap:2px;}
-  .pstep{
-    display:flex; align-items:center; gap:10px;
-    padding:6px 2px;
-    opacity:0.4;
-    transition:opacity .2s ease;
+
+  .flow-diagram{display:flex; flex-direction:column; align-items:center;}
+
+  .flow-stem{width:1px; height:22px; background:var(--line); flex:none;}
+
+  .flow-node{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    padding:14px 8px 12px;
+    text-align:center;
+    flex:none;
+    transition:border-color .35s ease, background .35s ease, opacity .35s ease;
   }
-  .pstep.active, .pstep.done{opacity:1;}
-  .pstep.skipped{opacity:0.2;}
-  .pdot{width:7px; height:7px; border-radius:50%; background:var(--text-faint); flex:none;}
-  .pstep.active .pdot{background:var(--brass); box-shadow:0 0 0 3px var(--brass-soft);}
-  .pstep.done .pdot{background:var(--low);}
-  .plabel{font-size:12.5px; color:var(--text-muted); font-family:var(--sans);}
-  .pstep.active .plabel, .pstep.done .plabel{color:var(--text);}
+  .flow-node .flow-icon{
+    width:22px; height:22px; margin:0 auto 8px;
+    color:var(--text-faint);
+    transition:color .35s ease;
+  }
+  .flow-node .flow-icon svg{width:100%; height:100%; display:block;}
+  .flow-node .flow-label{font-family:var(--sans); font-weight:600; font-size:12.5px; color:var(--text-muted); line-height:1.3; transition:color .35s ease;}
+  .flow-node .flow-label .hi{font-weight:400; font-size:0.86em; margin-top:2px; color:var(--text-faint);}
+  .flow-node .flow-status{
+    font-family:var(--mono); font-size:9px; letter-spacing:0.07em;
+    color:var(--text-faint); margin-top:6px; text-transform:uppercase;
+  }
+
+  .flow-node.status-active{border-color:var(--brass); background:var(--brass-soft); box-shadow:0 0 0 3px var(--brass-soft);}
+  .flow-node.status-active .flow-icon{color:var(--brass); animation:pulse 1.3s ease-in-out infinite;}
+  .flow-node.status-active .flow-label{color:var(--text);}
+  .flow-node.status-active .flow-status{color:var(--brass);}
+
+  .flow-node.status-done{border-color:rgba(95,185,139,0.4); background:rgba(95,185,139,0.06);}
+  .flow-node.status-done .flow-icon{color:var(--low);}
+  .flow-node.status-done .flow-label{color:var(--text);}
+  .flow-node.status-done .flow-status{color:var(--low);}
+
+  .flow-node.status-skipped{opacity:0.35;}
+  .flow-node.status-pending{opacity:0.6;}
+
+  .flow-planner{width:158px;}
+  .flow-final{width:190px;}
+
+  .flow-row-outer{max-width:100%; overflow-x:auto; padding-bottom:2px;}
+  .flow-row-wrap{position:relative; width:732px; margin:0 auto;}
+  .flow-bus{position:absolute; top:0; left:48px; right:48px; height:1px; background:var(--line);}
+  .flow-columns{display:flex; gap:10px; padding-top:22px;}
+  .flow-column{display:flex; flex-direction:column; align-items:center; width:96px;}
+  .flow-column .flow-node{width:96px;}
+
+  @media (max-width:920px){
+    .flow-row-wrap{margin:0;}
+  }
 
   .loading-line{
     display:none; align-items:center; gap:9px;
@@ -371,6 +412,11 @@
     <p>Ask a plain question about a coastal spot. ORCAWA checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। ORCAWA हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
   </section>
 
+  <section class="flow-section" id="flowSection">
+    <div class="flow-caption">Parallel pipeline execution<span class="hi" style="display:inline; margin-top:0; text-transform:none;"> / समानांतर प्रक्रिया</span></div>
+    <div class="flow-diagram" id="flowDiagram"></div>
+  </section>
+
   <div class="console-shell">
 
     <section class="console" id="console">
@@ -403,11 +449,6 @@
 
       <button class="run-btn" id="runBtn">Run assessment<span class="hi">आकलन चलाएँ</span></button>
       <div class="console-hint">Typically 15&ndash;40s &mdash; ORCAWA calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
-
-      <div class="pipeline" id="pipeline">
-        <div class="pipeline-caption">Pipeline<span class="hi">प्रक्रिया</span></div>
-        <div class="pipeline-list" id="pipelineList"></div>
-      </div>
 
       <div class="loading-line" id="loadingLine">
         <span class="loading-dot"></span>
@@ -491,47 +532,121 @@
 <script>
   document.getElementById('year').textContent = new Date().getFullYear();
 
-  const PIPELINE_NODES = [
-    ["planner", "Planner", "योजना"],
-    ["gis", "Coastal check", "तटीय जांच"],
-    ["weather", "Weather", "मौसम"],
-    ["ocean", "Sea state", "समुद्री स्थिति"],
-    ["tide", "Tide", "ज्वार-भाटा"],
-    ["cyclone", "Cyclone", "चक्रवात"],
-    ["ecosystem", "Ecosystem", "पारिस्थितिकी"],
-    ["pfz", "Fishing zone", "मछली क्षेत्र"],
-    ["recommendation", "Assessment", "आकलन"],
+  const ICONS = {
+    planner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="19" r="1.8"/><circle cx="19" cy="5" r="1.8"/><path d="M6.3 17.7C7 12 10 10.5 12 9s3-3.3 5.7-3.7" stroke-dasharray="2.4 3"/></svg>',
+    gis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>',
+    weather: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.6"/><path d="M8 3.2v1.3M8 11.5v1.3M3.2 8h1.3M11.5 8h1.3M5 5l.9.9M10.1 10.1l.9.9M11 5l-.9.9M5.9 10.1l-.9.9"/><path d="M9.5 16h7.5a3.2 3.2 0 0 0 .3-6.4 4.8 4.8 0 0 0-9-1.7"/></svg>',
+    ocean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>',
+    tide: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 4.2a7.8 7.8 0 1 0 0 15.6 6.4 6.4 0 0 1 0-15.6Z"/></svg>',
+    cyclone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5a5 5 0 1 1-3.6 8.5"/><path d="M12 4.5a8 8 0 1 0 6 13.3"/></svg>',
+    ecosystem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5c7.5 0 13-5.5 15-15-9.5 0-15 5.5-15 15Z"/><path d="M6.5 17.5c3-4 6.5-7.5 11-9.5"/></svg>',
+    pfz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12c4-4.6 9.5-6.4 14.2-4.6-1 1.9-1 3.3 0 5.2-1 1.9-1 3.3 0 5.2-4.7 1.8-10.2 0-14.2-4.6Z"/><circle cx="7.2" cy="10.6" r="0.6" fill="currentColor" stroke="none"/></svg>',
+    assessment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg>',
+  };
+
+  const FLOW_PLANNER = { id: "planner", label: "Planner", hi: "योजना" };
+  const FLOW_AGENTS = [
+    { id: "gis", label: "Coastal check", hi: "तटीय जांच" },
+    { id: "weather", label: "Weather", hi: "मौसम" },
+    { id: "ocean", label: "Sea state", hi: "समुद्री स्थिति" },
+    { id: "tide", label: "Tide", hi: "ज्वार-भाटा" },
+    { id: "cyclone", label: "Cyclone", hi: "चक्रवात" },
+    { id: "ecosystem", label: "Ecosystem", hi: "पारिस्थितिकी" },
+    { id: "pfz", label: "Fishing zone", hi: "मछली क्षेत्र" },
   ];
+  const FLOW_FINAL = { id: "assessment", label: "Final assessment", hi: "आकलन" };
+
+  const STATUS_TEXT = {
+    pending: "Waiting",
+    active: "Running",
+    done: "Completed",
+    skipped: "Not required",
+  };
+
+  function flowNodeHTML(node) {
+    return `
+      <span class="flow-icon">${ICONS[node.id] || ""}</span>
+      <span class="flow-label">${node.label}<span class="hi">${node.hi}</span></span>
+      <span class="flow-status" data-status-for="${node.id}">Waiting</span>
+    `;
+  }
+
+  function buildFlow() {
+    const root = document.getElementById("flowDiagram");
+    if (!root || root.dataset.built) return;
+    root.dataset.built = "1";
+
+    const planner = document.createElement("div");
+    planner.className = "flow-node flow-planner status-pending";
+    planner.dataset.node = FLOW_PLANNER.id;
+    planner.innerHTML = flowNodeHTML(FLOW_PLANNER);
+    root.appendChild(planner);
+
+    const stem1 = document.createElement("div");
+    stem1.className = "flow-stem";
+    root.appendChild(stem1);
+
+    const rowOuter = document.createElement("div");
+    rowOuter.className = "flow-row-outer";
+    const rowWrap = document.createElement("div");
+    rowWrap.className = "flow-row-wrap";
+    const bus = document.createElement("div");
+    bus.className = "flow-bus";
+    const columns = document.createElement("div");
+    columns.className = "flow-columns";
+
+    FLOW_AGENTS.forEach((agent) => {
+      const col = document.createElement("div");
+      col.className = "flow-column";
+      const stem = document.createElement("div");
+      stem.className = "flow-stem";
+      const node = document.createElement("div");
+      node.className = "flow-node status-pending";
+      node.dataset.node = agent.id;
+      node.innerHTML = flowNodeHTML(agent);
+      col.appendChild(stem);
+      col.appendChild(node);
+      columns.appendChild(col);
+    });
+
+    rowWrap.appendChild(bus);
+    rowWrap.appendChild(columns);
+    rowOuter.appendChild(rowWrap);
+    root.appendChild(rowOuter);
+
+    const stem2 = document.createElement("div");
+    stem2.className = "flow-stem";
+    root.appendChild(stem2);
+
+    const final = document.createElement("div");
+    final.className = "flow-node flow-final status-pending";
+    final.dataset.node = FLOW_FINAL.id;
+    final.innerHTML = flowNodeHTML(FLOW_FINAL);
+    root.appendChild(final);
+  }
+
+  function setFlowStatus(statusMap) {
+    Object.entries(statusMap).forEach(([id, status]) => {
+      const node = document.querySelector(`.flow-node[data-node="${id}"]`);
+      if (!node) return;
+      node.classList.remove("status-pending", "status-active", "status-done", "status-skipped");
+      node.classList.add(`status-${status}`);
+      const statusEl = node.querySelector(`[data-status-for="${id}"]`);
+      if (statusEl) statusEl.textContent = STATUS_TEXT[status] || status;
+    });
+  }
 
   const RISK_COLORS = {
     LOW: "var(--low)", MODERATE: "var(--moderate)", HIGH: "var(--high)",
     SEVERE: "var(--severe)", UNKNOWN: "var(--unknown)",
   };
 
-  const LOADING_MESSAGES = [
-    "Reading the planner's route\u2026",
-    "Pulling wind and wave forecasts\u2026",
-    "Checking tide stations\u2026",
-    "Scanning for active cyclones\u2026",
-    "Cross-checking coastal boundaries\u2026",
-    "Assembling the final assessment\u2026",
-  ];
-  const LOADING_MESSAGES_HI = [
-    "मार्ग पढ़ा जा रहा है\u2026",
-    "हवा और लहर का पूर्वानुमान लिया जा रहा है\u2026",
-    "ज्वार केंद्रों की जांच हो रही है\u2026",
-    "सक्रिय चक्रवातों की तलाश हो रही है\u2026",
-    "तटीय सीमाओं की जांच हो रही है\u2026",
-    "अंतिम आकलन तैयार किया जा रहा है\u2026",
-  ];
-
   const latEl = document.getElementById('lat');
   const lonEl = document.getElementById('lon');
   const questionEl = document.getElementById('question');
   const runBtn = document.getElementById('runBtn');
   const presets = document.getElementById('presets');
-  const pipelineWrap = document.getElementById('pipeline');
-  const pipelineList = document.getElementById('pipelineList');
+  const flowSection = document.getElementById('flowSection');
   const loadingLine = document.getElementById('loadingLine');
   const loadingText = document.getElementById('loadingText');
   const faultPanel = document.getElementById('faultPanel');
@@ -549,24 +664,6 @@
     [...presets.children].forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
   });
-
-  function renderPipeline(activeIndex, requiredSet) {
-    pipelineList.innerHTML = '';
-    PIPELINE_NODES.forEach(([key, label, labelHi], i) => {
-      const node = document.createElement('div');
-      let state = 'pending';
-      const isCore = key === 'planner' || key === 'gis' || key === 'recommendation';
-      const required = isCore || !requiredSet || requiredSet.has(key);
-
-      if (!required) state = 'skipped';
-      else if (i < activeIndex) state = 'done';
-      else if (i === activeIndex) state = 'active';
-
-      node.className = `pstep ${state}`;
-      node.innerHTML = `<span class="pdot"></span><span class="plabel">${label} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${labelHi}</span></span>`;
-      pipelineList.appendChild(node);
-    });
-  }
 
   function showPlaceholder() {
     placeholder.style.display = '';
@@ -601,29 +698,56 @@
     placeholder.style.display = 'none';
     runBtn.disabled = true;
     runBtn.textContent = 'Running\u2026';
-    pipelineWrap.classList.add('show');
+    buildFlow();
+    flowSection.classList.add('show');
     loadingLine.classList.add('show');
-    renderPipeline(0, null);
+    loadingText.innerHTML = 'Streaming live pipeline status\u2026 <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ लाइव प्रक्रिया की स्थिति दिखाई जा रही है\u2026</span>';
 
-    let msgIndex = 0;
-    loadingText.innerHTML = `${LOADING_MESSAGES[0]} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${LOADING_MESSAGES_HI[0]}</span>`;
-    const msgTimer = setInterval(() => {
-      msgIndex = (msgIndex + 1) % LOADING_MESSAGES.length;
-      loadingText.innerHTML = `${LOADING_MESSAGES[msgIndex]} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${LOADING_MESSAGES_HI[msgIndex]}</span>`;
-      const stepIndex = Math.min(msgIndex + 1, PIPELINE_NODES.length - 1);
-      renderPipeline(stepIndex, null);
-    }, 2600);
+    // Only the planner knows which agents are required, and it only
+    // knows that once its own node has run \u2014 so every agent starts
+    // "pending" and gets set to active/skipped the moment the planner's
+    // event arrives, never faked as running before that.
+    setFlowStatus({
+      planner: 'active', gis: 'pending', weather: 'pending', ocean: 'pending',
+      tide: 'pending', cyclone: 'pending', ecosystem: 'pending', pfz: 'pending',
+      assessment: 'pending',
+    });
+
+    let requiredAgentIds = new Set();
+    const doneAgentIds = new Set();
+    let finalData = null;
+
+    function handlePlannerEvent(plan) {
+      const required = new Set(
+        (plan?.required_agents || []).map(a => String(a).toLowerCase())
+      );
+      required.add('gis'); // GIS is the application baseline and always runs
+      requiredAgentIds = new Set(FLOW_AGENTS.map(a => a.id).filter(id => required.has(id)));
+      const map = { planner: 'done' };
+      FLOW_AGENTS.forEach(a => { map[a.id] = required.has(a.id) ? 'active' : 'skipped'; });
+      setFlowStatus(map);
+    }
+
+    function handleAgentDone(nodeName) {
+      if (nodeName === 'recommendation') {
+        setFlowStatus({ assessment: 'active' });
+        return;
+      }
+      doneAgentIds.add(nodeName);
+      setFlowStatus({ [nodeName]: 'done' });
+      if (requiredAgentIds.size && doneAgentIds.size >= requiredAgentIds.size) {
+        setFlowStatus({ assessment: 'active' });
+      }
+    }
 
     try {
-      const res = await fetch('/api/ask', {
+      const res = await fetch('/api/ask/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ latitude, longitude, question }),
       });
 
-      clearInterval(msgTimer);
-
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         let detail = '';
         try {
           const body = await res.json();
@@ -643,15 +767,48 @@
         return;
       }
 
-      const data = await res.json();
-      const requiredSet = new Set(
-        (data.plan?.required_agents || []).map(a => String(a).toLowerCase())
-      );
-      renderPipeline(PIPELINE_NODES.length, requiredSet);
-      renderResults(data, latitude, longitude);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let stopped = false;
+
+      while (!stopped) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIndex;
+        while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIndex);
+          buffer = buffer.slice(sepIndex + 2);
+          const line = rawEvent.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+
+          let evt;
+          try { evt = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
+
+          if (evt.type === 'node_done') {
+            if (evt.node === 'planner') handlePlannerEvent(evt.plan);
+            else handleAgentDone(evt.node);
+          } else if (evt.type === 'final') {
+            setFlowStatus({ assessment: 'done' });
+            finalData = evt;
+          } else if (evt.type === 'error') {
+            showFault('INSTRUMENT FAULT', evt.detail || 'The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।');
+            stopped = true;
+          }
+        }
+      }
+
+      if (stopped) return;
+
+      if (finalData) {
+        renderResults(finalData, latitude, longitude);
+      } else {
+        showFault('NO SIGNAL', "The pipeline stream ended without a final result. Try again. / प्रक्रिया अधूरी समाप्त हुई, फिर कोशिश करें।");
+      }
 
     } catch (err) {
-      clearInterval(msgTimer);
       showFault('NO SIGNAL', "Couldn't reach ORCAWA's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
     } finally {
       loadingLine.classList.remove('show');
