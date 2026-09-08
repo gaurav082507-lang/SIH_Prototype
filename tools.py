@@ -124,22 +124,13 @@ def check_coastal_proximity(
     ring_samples: int = 16,
 ) -> dict:
     """
-    Deterministically check whether a lat/lon point is on/near a coastline.
-
-    Returns:
-        {
-            "is_over_water": bool,       # point itself is on the sea
-            "is_coastal": bool,          # point is on water OR within max_radius_km of a coast
-            "approx_distance_km": float | None,  # nearest ring radius where land/water boundary found
-            "checked_radii_km": [list of radii sampled],
-        }
-
-    Method: uses an offline land/ocean raster (global-land-mask). If the
-    point itself is over water, it's coastal by definition. Otherwise,
-    samples points in rings of increasing radius around the coordinate;
-    if any ring mixes land and water samples, a coastline crosses that
-    ring, so the point is considered coastal at ~that distance.
+    ... (docstring unchanged) ...
     """
+    from global_land_mask import globe   # lazy import — loads the raster
+                                          # only when this tool actually runs,
+                                          # not at process startup, to cut
+                                          # peak memory during Render's boot.
+
     lat = float(latitude)
     lon = float(longitude)
 
