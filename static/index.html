@@ -3,26 +3,26 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Meridian — Marine Conditions Intelligence</title>
-<meta name="description" content="Meridian reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment." />
+<title>ORCAWA — Marine Conditions Intelligence</title>
+<meta name="description" content="ORCAWA reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment, in English and Hindi." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg-deep:#061622;
     --bg-mid:#0b2536;
-    --bg-teal:#123c52;
     --panel:rgba(234,242,246,0.045);
     --panel-strong:rgba(234,242,246,0.075);
-    --line:rgba(234,242,246,0.10);
+    --line:rgba(234,242,246,0.11);
     --line-soft:rgba(234,242,246,0.06);
     --text:#eaf2f6;
     --text-muted:#93aebb;
     --text-faint:#5f7c8a;
     --brass:#c9a15a;
-    --brass-soft:rgba(201,161,90,0.18);
+    --brass-soft:rgba(201,161,90,0.16);
     --coral:#e2775a;
+    --coral-soft:rgba(226,119,90,0.12);
     --low:#5fb98b;
     --moderate:#c9a15a;
     --high:#e2775a;
@@ -33,7 +33,41 @@
     --serif:'Fraunces', Georgia, serif;
     --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --hindi:'Noto Sans Devanagari', 'IBM Plex Sans', sans-serif;
   }
+
+  .hi{
+    display:block;
+    font-family:var(--hindi);
+    color:var(--text-faint);
+    font-weight:400;
+  }
+  label .hi, .panel-eyebrow .hi, .plabel .hi, .console-label .hi{
+    font-size:0.92em;
+    margin-top:2px;
+    color:var(--text-faint);
+    letter-spacing:0;
+  }
+  .hero h1 .hi{
+    font-size:0.56em;
+    color:var(--text-muted);
+    margin-top:8px;
+    font-weight:400;
+    line-height:1.3;
+  }
+  .hero p .hi{
+    margin-top:6px;
+    color:var(--text-faint);
+    font-size:0.95em;
+  }
+  .run-btn .hi{color:rgba(6,20,31,0.65); font-size:0.82em; margin-top:1px;}
+  .brand-tag .hi{margin-top:1px; font-size:1em;}
+  .rec-banner #recText .hi, #summaryText.hi{margin-top:6px;}
+  .fault-title .hi{margin-top:2px; color:#f4b3ae; font-size:0.9em;}
+  .placeholder .hi{color:var(--text-faint); font-size:0.95em; margin-top:4px;}
+  nav.top-links span{display:flex; flex-direction:column; gap:1px; text-align:left;}
+  nav.top-links .hi{font-size:0.82em; margin-top:0;}
+  footer span .hi{margin-top:3px; font-size:0.95em;}
 
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
@@ -43,8 +77,8 @@
     font-family:var(--sans);
     color:var(--text);
     background:
-      radial-gradient(ellipse 900px 500px at 12% -8%, rgba(18,60,82,0.55), transparent 60%),
-      radial-gradient(ellipse 700px 600px at 105% 8%, rgba(201,161,90,0.08), transparent 55%),
+      radial-gradient(ellipse 900px 500px at 12% -8%, rgba(18,60,82,0.5), transparent 60%),
+      radial-gradient(ellipse 700px 600px at 105% 8%, rgba(201,161,90,0.07), transparent 55%),
       linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%);
     min-height:100vh;
     line-height:1.5;
@@ -52,100 +86,75 @@
   }
 
   a{color:inherit;}
-
   ::selection{background:var(--brass-soft); color:var(--text);}
-
-  /* focus visibility */
   button:focus-visible, input:focus-visible, textarea:focus-visible{
     outline:2px solid var(--brass);
     outline-offset:2px;
   }
 
-  .wrap{max-width:900px; margin:0 auto; padding:0 24px;}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
 
   /* ---------------- Header ---------------- */
-  header.top{
-    padding:26px 0 0;
-  }
+  header.top{padding:26px 0 0;}
   .top-row{
     display:flex; align-items:center; justify-content:space-between;
     padding-bottom:22px;
     border-bottom:1px solid var(--line-soft);
   }
   .brand{display:flex; align-items:center; gap:12px;}
-  .brand-mark{
-    width:34px; height:34px; flex:none;
-  }
-  .brand-word{
-    font-family:var(--serif);
-    font-size:20px;
-    font-weight:600;
-    letter-spacing:0.01em;
-  }
-  .brand-tag{
-    font-size:12px;
-    color:var(--text-faint);
-    font-family:var(--mono);
-    margin-top:1px;
-  }
-  nav.top-links{
-    display:flex; gap:26px; font-size:14px; color:var(--text-muted);
-  }
-  nav.top-links span{cursor:default;}
+  .brand-mark{width:32px; height:32px; flex:none;}
+  .brand-word{font-family:var(--serif); font-size:19px; font-weight:600; letter-spacing:0.01em;}
+  .brand-tag{font-size:11px; color:var(--text-faint); font-family:var(--mono); margin-top:1px; letter-spacing:0.03em;}
+  nav.top-links{display:flex; gap:24px; font-size:13.5px; color:var(--text-muted);}
   @media (max-width:640px){ nav.top-links{display:none;} }
 
   /* ---------------- Hero ---------------- */
-  .hero{
-    padding:56px 0 40px;
-    position:relative;
-  }
+  .hero{padding:48px 0 36px; max-width:640px;}
   .hero h1{
     font-family:var(--serif);
     font-weight:500;
-    font-size:clamp(32px, 5vw, 50px);
-    line-height:1.12;
-    margin:0 0 18px;
-    max-width:15ch;
+    font-size:clamp(30px, 4.4vw, 46px);
+    line-height:1.14;
+    margin:0 0 16px;
   }
-  .hero p{
-    font-size:16.5px;
-    color:var(--text-muted);
-    max-width:52ch;
-    margin:0;
-  }
-  .hero-wave{
-    position:absolute; right:-40px; top:10px; opacity:0.5; pointer-events:none;
-  }
-  @media (max-width:640px){ .hero-wave{display:none;} }
+  .hero p{font-size:16px; color:var(--text-muted); margin:0; max-width:52ch;}
 
-  /* ---------------- Console card ---------------- */
+  /* ---------------- Two-pane layout ---------------- */
+  .console-shell{
+    display:grid;
+    grid-template-columns: 400px 1fr;
+    gap:22px;
+    align-items:start;
+    padding-bottom:64px;
+  }
+  @media (max-width:920px){
+    .console-shell{grid-template-columns:1fr;}
+  }
+
   .console{
     background:var(--panel);
     border:1px solid var(--line);
     border-radius:var(--radius-md);
-    padding:26px;
+    padding:24px;
     backdrop-filter:blur(6px);
+    position:sticky;
+    top:20px;
   }
+  @media (max-width:920px){ .console{position:static;} }
+
   .console-label{
     font-family:var(--mono);
     font-size:11px;
-    color:var(--text-faint);
-    letter-spacing:0.04em;
-    margin-bottom:14px;
+    color:var(--brass);
+    letter-spacing:0.06em;
+    margin-bottom:16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--line-soft);
   }
 
-  .coord-row{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:14px;
-    margin-bottom:14px;
-  }
-  .field{
-    display:flex; flex-direction:column; gap:6px;
-  }
-  .field label{
-    font-size:12px; color:var(--text-faint);
-  }
+  .coord-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;}
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field label{font-size:12.5px; color:var(--text-muted);}
   .field input, .field textarea{
     background:rgba(6,22,34,0.55);
     border:1px solid var(--line);
@@ -153,7 +162,7 @@
     color:var(--text);
     font-family:var(--mono);
     font-size:14px;
-    padding:11px 12px;
+    padding:10px 12px;
     width:100%;
   }
   .field textarea{
@@ -164,9 +173,7 @@
   }
   .field input::placeholder, .field textarea::placeholder{color:var(--text-faint);}
 
-  .presets{
-    display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;
-  }
+  .presets{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
   .chip{
     font-family:var(--mono);
     font-size:12px;
@@ -181,11 +188,8 @@
   .chip:hover{border-color:var(--brass); color:var(--text);}
   .chip.active{border-color:var(--brass); color:var(--brass); background:var(--brass-soft);}
 
-  .console-footer{
-    display:flex; align-items:center; justify-content:space-between; gap:16px;
-    flex-wrap:wrap;
-  }
   .run-btn{
+    width:100%;
     font-family:var(--sans);
     font-weight:600;
     font-size:14.5px;
@@ -193,181 +197,122 @@
     background:linear-gradient(135deg, #d8b579, var(--brass));
     border:none;
     border-radius:var(--radius-sm);
-    padding:12px 22px;
+    padding:13px 20px;
     cursor:pointer;
     transition:transform .15s ease, box-shadow .15s ease;
-    box-shadow:0 4px 14px rgba(201,161,90,0.18);
+    box-shadow:0 4px 14px rgba(201,161,90,0.16);
   }
-  .run-btn:hover{transform:translateY(-1px); box-shadow:0 6px 18px rgba(201,161,90,0.28);}
+  .run-btn:hover{transform:translateY(-1px); box-shadow:0 6px 18px rgba(201,161,90,0.26);}
   .run-btn:disabled{opacity:0.55; cursor:progress; transform:none;}
-  .console-hint{font-size:12.5px; color:var(--text-faint);}
+  .console-hint{font-size:12px; color:var(--text-faint); margin-top:10px; text-align:center;}
 
   /* ---------------- Pipeline strip ---------------- */
-  .pipeline{
-    margin-top:22px;
-    display:none;
-  }
+  .pipeline{margin-top:22px; display:none;}
   .pipeline.show{display:block;}
-  .pipeline-scroll{
-    display:flex; gap:0; overflow-x:auto; padding-bottom:4px;
+  .pipeline-caption{
+    font-family:var(--mono); font-size:10.5px; color:var(--text-faint);
+    letter-spacing:0.05em; margin-bottom:12px;
   }
-  .pnode{
-    display:flex; flex-direction:column; align-items:center; gap:6px;
-    min-width:88px;
-    padding:4px 6px;
+  .pipeline-list{display:flex; flex-direction:column; gap:2px;}
+  .pstep{
+    display:flex; align-items:center; gap:10px;
+    padding:6px 2px;
     opacity:0.4;
     transition:opacity .2s ease;
   }
-  .pnode.active{opacity:1;}
-  .pnode.done{opacity:1;}
-  .pnode.skipped{opacity:0.22;}
-  .pdot{
-    width:9px; height:9px; border-radius:50%;
-    background:var(--text-faint);
-    border:1px solid transparent;
+  .pstep.active, .pstep.done{opacity:1;}
+  .pstep.skipped{opacity:0.2;}
+  .pdot{width:7px; height:7px; border-radius:50%; background:var(--text-faint); flex:none;}
+  .pstep.active .pdot{background:var(--brass); box-shadow:0 0 0 3px var(--brass-soft);}
+  .pstep.done .pdot{background:var(--low);}
+  .plabel{font-size:12.5px; color:var(--text-muted); font-family:var(--sans);}
+  .pstep.active .plabel, .pstep.done .plabel{color:var(--text);}
+
+  .loading-line{
+    display:none; align-items:center; gap:9px;
+    font-family:var(--mono); font-size:12px; color:var(--brass);
+    margin-top:14px;
   }
-  .pnode.active .pdot{background:var(--brass); box-shadow:0 0 0 4px var(--brass-soft);}
-  .pnode.done .pdot{background:var(--low);}
-  .plabel{font-size:11px; color:var(--text-muted); font-family:var(--mono); text-align:center;}
-  .parrow{
-    align-self:center; color:var(--text-faint); font-size:12px; padding:0 2px;
-    margin-top:-14px;
-  }
+  .loading-line.show{display:flex;}
+  .loading-dot{width:6px; height:6px; border-radius:50%; background:var(--brass); animation:pulse 1.1s ease-in-out infinite;}
+  @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
 
   /* ---------------- Results ---------------- */
-  .results{
-    margin-top:36px;
-    display:none;
+  .results-col{min-height:200px;}
+
+  .placeholder{
+    border:1px dashed var(--line);
+    border-radius:var(--radius-md);
+    padding:48px 24px;
+    text-align:center;
+    color:var(--text-faint);
+    font-size:14.5px;
   }
+  .placeholder strong{display:block; color:var(--text-muted); font-family:var(--serif); font-size:19px; font-weight:500; margin-bottom:8px;}
+
+  .results{display:none;}
   .results.show{display:block;}
 
-  .risk-row{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:16px;
-    margin-bottom:20px;
-  }
-  @media (max-width:600px){ .risk-row{grid-template-columns:1fr;} }
+  .risk-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
+  @media (max-width:560px){ .risk-row{grid-template-columns:1fr;} }
 
-  .panel{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:var(--radius-md);
-    padding:20px 22px;
-  }
-  .panel-eyebrow{
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--text-faint);
-    margin-bottom:10px;
-  }
-  .risk-value{
-    font-family:var(--serif);
-    font-size:34px;
-    font-weight:600;
-    display:flex; align-items:baseline; gap:10px;
-  }
-  .risk-dot{width:11px; height:11px; border-radius:50%; margin-bottom:4px;}
-  .risk-value small{font-family:var(--sans); font-size:13px; color:var(--text-faint); font-weight:400;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 20px;}
+  .panel-eyebrow{font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-bottom:10px; letter-spacing:0.04em;}
+  .risk-value{font-family:var(--serif); font-size:32px; font-weight:600; display:flex; align-items:baseline; gap:10px;}
+  .risk-dot{width:10px; height:10px; border-radius:50%; margin-bottom:4px; flex:none;}
+  .risk-value small{font-family:var(--sans); font-size:12.5px; color:var(--text-faint); font-weight:400;}
 
-  .loc-value{font-family:var(--mono); font-size:16px; color:var(--text);}
+  .loc-value{font-family:var(--mono); font-size:15px; color:var(--text);}
   .loc-sub{font-size:12.5px; color:var(--text-faint); margin-top:4px;}
 
-  .assessment-panel{margin-bottom:16px;}
+  .assessment-panel{margin-bottom:14px;}
   .assessment-panel p{margin:0; font-size:15.5px; color:var(--text); line-height:1.65;}
 
   .rec-banner{
-    border-radius:var(--radius-md);
-    padding:18px 20px;
-    margin-bottom:20px;
-    border:1px solid rgba(95,185,139,0.35);
-    background:rgba(95,185,139,0.08);
-    color:#d7f2e4;
-    font-size:15px;
-    line-height:1.55;
+    border-radius:var(--radius-md); padding:17px 19px; margin-bottom:14px;
+    border:1px solid rgba(95,185,139,0.32);
+    background:rgba(95,185,139,0.07);
+    color:#d7f2e4; font-size:15px; line-height:1.55;
   }
   .rec-banner .panel-eyebrow{color:#8fd0ab;}
 
-  .two-col{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:16px;
-    margin-bottom:16px;
-  }
-  @media (max-width:600px){ .two-col{grid-template-columns:1fr;} }
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
+  @media (max-width:560px){ .two-col{grid-template-columns:1fr;} }
 
-  .list-panel ul{
-    margin:0; padding:0; list-style:none;
-    display:flex; flex-direction:column; gap:10px;
-  }
-  .list-panel li{
-    font-size:14px; line-height:1.5;
-    padding-left:16px;
-    position:relative;
-    color:var(--text);
-  }
-  .list-panel li::before{
-    content:"";
-    position:absolute; left:0; top:7px;
-    width:5px; height:5px; border-radius:50%;
-    background:var(--brass);
-  }
+  .list-panel ul{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px;}
+  .list-panel li{font-size:13.5px; line-height:1.5; padding-left:15px; position:relative; color:var(--text);}
+  .list-panel li::before{content:""; position:absolute; left:0; top:6px; width:5px; height:5px; border-radius:50%; background:var(--brass);}
   .list-panel.advice li::before{background:var(--coral);}
 
-  details.raw{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:var(--radius-md);
-    padding:14px 20px;
-  }
-  details.raw summary{
-    cursor:pointer;
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--text-muted);
-    letter-spacing:0.02em;
-  }
-  details.raw pre{
-    margin:14px 0 4px;
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--text-muted);
-    white-space:pre-wrap;
-    word-break:break-word;
-    max-height:340px;
-    overflow:auto;
-  }
+  details.raw{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 18px;}
+  details.raw summary{cursor:pointer; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); letter-spacing:0.02em;}
+  details.raw pre{margin:14px 0 4px; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); white-space:pre-wrap; word-break:break-word; max-height:320px; overflow:auto;}
 
-  .error-panel{
+  /* ---------------- Fault panel (errors) ---------------- */
+  .fault-panel{
     border:1px solid rgba(217,86,79,0.4);
-    background:rgba(217,86,79,0.08);
+    background:rgba(217,86,79,0.07);
     border-radius:var(--radius-md);
     padding:18px 20px;
-    color:#f4c9c6;
-    font-size:14.5px;
     display:none;
   }
-  .error-panel.show{display:block;}
-
-  .loading-line{
-    display:none;
-    align-items:center; gap:10px;
-    font-family:var(--mono); font-size:12.5px; color:var(--brass);
-    margin-top:16px;
+  .fault-panel.show{display:block;}
+  .fault-head{display:flex; align-items:center; gap:9px; margin-bottom:8px;}
+  .fault-dot{width:8px; height:8px; border-radius:50%; background:var(--severe); flex:none;}
+  .fault-title{font-family:var(--mono); font-size:12px; color:#f4b3ae; letter-spacing:0.03em;}
+  .fault-body{font-size:14px; color:#f4c9c6; line-height:1.55;}
+  .fault-body a{color:var(--brass); text-decoration:underline;}
+  .fault-retry{
+    margin-top:12px;
+    font-family:var(--mono); font-size:12px;
+    background:transparent; border:1px solid rgba(217,86,79,0.4);
+    color:#f4c9c6; padding:8px 14px; border-radius:var(--radius-sm); cursor:pointer;
   }
-  .loading-line.show{display:flex;}
-  .loading-dot{
-    width:6px; height:6px; border-radius:50%; background:var(--brass);
-    animation:pulse 1.1s ease-in-out infinite;
-  }
-  @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
+  .fault-retry:hover{border-color:#f4c9c6;}
 
   footer{
-    margin:70px 0 40px;
-    padding-top:22px;
-    border-top:1px solid var(--line-soft);
-    font-size:12.5px;
-    color:var(--text-faint);
+    margin:20px 0 40px; padding-top:20px; border-top:1px solid var(--line-soft);
+    font-size:12px; color:var(--text-faint);
     display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
   }
 
@@ -390,118 +335,137 @@
           <circle cx="17" cy="10.5" r="1.6" fill="#c9a15a"/>
         </svg>
         <div>
-          <div class="brand-word">Meridian</div>
-          <div class="brand-tag">MARINE CONDITIONS INTELLIGENCE</div>
+          <div class="brand-word">ORCAWA</div>
+          <div class="brand-tag">Marine conditions intelligence<span class="hi">समुद्री स्थिति सूचना</span></div>
         </div>
       </div>
       <nav class="top-links">
-        <span>Weather</span>
-        <span>Sea state</span>
-        <span>Tides</span>
-        <span>Hazards</span>
+        <span>Weather<span class="hi">मौसम</span></span>
+        <span>Sea state<span class="hi">समुद्री स्थिति</span></span>
+        <span>Tides<span class="hi">ज्वार-भाटा</span></span>
+        <span>Hazards<span class="hi">खतरे</span></span>
       </nav>
     </div>
   </header>
 
   <section class="hero">
-    <h1>Know the water before you go.</h1>
-    <p>Ask a plain question about a coastal spot. Meridian checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment — with the numbers behind it.</p>
+    <h1>Know the water before you go.<span class="hi">जाने से पहले समुद्र को जानें</span></h1>
+    <p>Ask a plain question about a coastal spot. ORCAWA checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। ORCAWA हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
   </section>
 
-  <section class="console" id="console">
-    <div class="console-label">TARGET LOCATION &amp; QUESTION</div>
+  <div class="console-shell">
 
-    <div class="coord-row">
-      <div class="field">
-        <label for="lat">Latitude</label>
-        <input id="lat" type="number" step="0.0001" value="19.0760" placeholder="19.0760" />
-      </div>
-      <div class="field">
-        <label for="lon">Longitude</label>
-        <input id="lon" type="number" step="0.0001" value="72.8777" placeholder="72.8777" />
-      </div>
-    </div>
+    <section class="console" id="console">
+      <div class="console-label">Target location &amp; question<span class="hi">स्थान और प्रश्न</span></div>
 
-    <div class="presets" id="presets">
-      <button class="chip" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
-      <button class="chip" data-lat="13.0827" data-lon="80.2707">Chennai</button>
-      <button class="chip" data-lat="9.9312" data-lon="76.2673">Kochi</button>
-      <button class="chip" data-lat="17.6868" data-lon="83.2185">Visakhapatnam</button>
-      <button class="chip" data-lat="15.4909" data-lon="73.8278">Goa</button>
-      <button class="chip" data-lat="8.0883" data-lon="77.5385">Kanyakumari</button>
-    </div>
-
-    <div class="field" style="margin-bottom:20px;">
-      <label for="question">Your question</label>
-      <textarea id="question" placeholder="e.g. Is it safe to take the boat out tomorrow morning?">Is it safe to venture into the sea tomorrow morning?</textarea>
-    </div>
-
-    <div class="console-footer">
-      <button class="run-btn" id="runBtn">Run assessment</button>
-      <span class="console-hint">Typically takes 15–40 seconds — Meridian is calling live marine data sources.</span>
-    </div>
-
-    <div class="pipeline" id="pipeline">
-      <div class="pipeline-scroll" id="pipelineScroll"></div>
-    </div>
-
-    <div class="loading-line" id="loadingLine">
-      <span class="loading-dot"></span>
-      <span id="loadingText">Contacting marine data sources…</span>
-    </div>
-  </section>
-
-  <div class="error-panel" id="errorPanel"></div>
-
-  <section class="results" id="results">
-
-    <div class="risk-row">
-      <div class="panel">
-        <div class="panel-eyebrow">OVERALL RISK</div>
-        <div class="risk-value">
-          <span class="risk-dot" id="riskDot"></span>
-          <span id="riskText">—</span>
-          <small id="riskActivity"></small>
+      <div class="coord-row">
+        <div class="field">
+          <label for="lat">Latitude<span class="hi">अक्षांश</span></label>
+          <input id="lat" type="number" step="0.0001" value="19.0760" placeholder="19.0760" />
+        </div>
+        <div class="field">
+          <label for="lon">Longitude<span class="hi">देशांतर</span></label>
+          <input id="lon" type="number" step="0.0001" value="72.8777" placeholder="72.8777" />
         </div>
       </div>
-      <div class="panel">
-        <div class="panel-eyebrow">LOCATION &amp; TIME</div>
-        <div class="loc-value" id="locValue">—</div>
-        <div class="loc-sub" id="locSub">—</div>
+
+      <div class="presets" id="presets">
+        <button class="chip" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
+        <button class="chip" data-lat="13.0827" data-lon="80.2707">Chennai</button>
+        <button class="chip" data-lat="9.9312" data-lon="76.2673">Kochi</button>
+        <button class="chip" data-lat="17.6868" data-lon="83.2185">Visakhapatnam</button>
+        <button class="chip" data-lat="15.4909" data-lon="73.8278">Goa</button>
+        <button class="chip" data-lat="8.0883" data-lon="77.5385">Kanyakumari</button>
       </div>
-    </div>
 
-    <div class="panel assessment-panel">
-      <div class="panel-eyebrow">ASSESSMENT</div>
-      <p id="summaryText">—</p>
-    </div>
-
-    <div class="rec-banner" id="recBanner">
-      <div class="panel-eyebrow">RECOMMENDATION</div>
-      <div id="recText">—</div>
-    </div>
-
-    <div class="two-col">
-      <div class="panel list-panel" id="findingsPanel">
-        <div class="panel-eyebrow">KEY FINDINGS</div>
-        <ul id="findingsList"></ul>
+      <div class="field" style="margin-bottom:18px;">
+        <label for="question">Your question<span class="hi">आपका प्रश्न</span></label>
+        <textarea id="question" placeholder="e.g. Is it safe to take the boat out tomorrow morning? / जैसे: क्या कल सुबह नाव ले जाना सुरक्षित है?">Is it safe to venture into the sea tomorrow morning?</textarea>
       </div>
-      <div class="panel list-panel advice" id="advicePanel">
-        <div class="panel-eyebrow">SAFETY ADVISORY</div>
-        <ul id="adviceList"></ul>
+
+      <button class="run-btn" id="runBtn">Run assessment<span class="hi">आकलन चलाएँ</span></button>
+      <div class="console-hint">Typically 15&ndash;40s &mdash; ORCAWA calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
+
+      <div class="pipeline" id="pipeline">
+        <div class="pipeline-caption">Pipeline<span class="hi">प्रक्रिया</span></div>
+        <div class="pipeline-list" id="pipelineList"></div>
       </div>
+
+      <div class="loading-line" id="loadingLine">
+        <span class="loading-dot"></span>
+        <span id="loadingText">Contacting marine data sources&hellip;</span>
+      </div>
+    </section>
+
+    <div class="results-col">
+
+      <div class="placeholder" id="placeholder">
+        <strong>No assessment yet<span class="hi" style="font-size:0.55em; margin-top:6px;">अभी तक कोई आकलन नहीं</span></strong>
+        Pick a location and ask a question to run a live marine check.
+        <span class="hi">कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।</span>
+      </div>
+
+      <div class="fault-panel" id="faultPanel">
+        <div class="fault-head">
+          <span class="fault-dot"></span>
+          <span class="fault-title" id="faultTitle">NO SIGNAL</span>
+        </div>
+        <div class="fault-body" id="faultBody"></div>
+        <button class="fault-retry" id="faultRetry">Try again<span class="hi" style="display:inline; margin-top:0;"> / फिर कोशिश करें</span></button>
+      </div>
+
+      <section class="results" id="results">
+
+        <div class="risk-row">
+          <div class="panel">
+            <div class="panel-eyebrow">Overall risk<span class="hi">समग्र जोखिम</span></div>
+            <div class="risk-value">
+              <span class="risk-dot" id="riskDot"></span>
+              <span id="riskText">&mdash;</span>
+              <small id="riskActivity"></small>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-eyebrow">Location &amp; time<span class="hi">स्थान और समय</span></div>
+            <div class="loc-value" id="locValue">&mdash;</div>
+            <div class="loc-sub" id="locSub">&mdash;</div>
+          </div>
+        </div>
+
+        <div class="panel assessment-panel">
+          <div class="panel-eyebrow">Assessment<span class="hi">आकलन</span></div>
+          <p id="summaryText">&mdash;</p>
+        </div>
+
+        <div class="rec-banner" id="recBanner">
+          <div class="panel-eyebrow">Recommendation<span class="hi">सिफारिश</span></div>
+          <div id="recText">&mdash;</div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel list-panel" id="findingsPanel">
+            <div class="panel-eyebrow">Key findings<span class="hi">मुख्य निष्कर्ष</span></div>
+            <ul id="findingsList"></ul>
+          </div>
+          <div class="panel list-panel advice" id="advicePanel">
+            <div class="panel-eyebrow">Safety advisory<span class="hi">सुरक्षा सलाह</span></div>
+            <ul id="adviceList"></ul>
+          </div>
+        </div>
+
+        <details class="raw">
+          <summary>View full agent data (technical readout) <span class="hi" style="display:inline; margin-top:0;">/ पूरा तकनीकी डेटा देखें</span></summary>
+          <pre id="rawData"></pre>
+        </details>
+
+      </section>
     </div>
 
-    <details class="raw">
-      <summary>View full agent data (technical readout)</summary>
-      <pre id="rawData"></pre>
-    </details>
-
-  </section>
+  </div>
 
   <footer>
-    <span>Meridian draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.</span>
-    <span>&copy; <span id="year"></span> Meridian</span>
+    <span>ORCAWA draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.<span class="hi">ORCAWA खुले समुद्री पूर्वानुमान, ज्वार केंद्रों और तटीय रजिस्ट्री से जानकारी लेता है। रवाना होने से पहले हमेशा स्थानीय अधिकारियों से पुष्टि करें।</span></span>
+    <span>&copy; <span id="year"></span> ORCAWA</span>
   </footer>
 
 </div>
@@ -510,32 +474,37 @@
   document.getElementById('year').textContent = new Date().getFullYear();
 
   const PIPELINE_NODES = [
-    ["planner", "Planner"],
-    ["gis", "Coastal"],
-    ["weather", "Weather"],
-    ["ocean", "Sea state"],
-    ["tide", "Tide"],
-    ["cyclone", "Cyclone"],
-    ["ecosystem", "Ecosystem"],
-    ["pfz", "Fishing zone"],
-    ["recommendation", "Assessment"],
+    ["planner", "Planner", "योजना"],
+    ["gis", "Coastal check", "तटीय जांच"],
+    ["weather", "Weather", "मौसम"],
+    ["ocean", "Sea state", "समुद्री स्थिति"],
+    ["tide", "Tide", "ज्वार-भाटा"],
+    ["cyclone", "Cyclone", "चक्रवात"],
+    ["ecosystem", "Ecosystem", "पारिस्थितिकी"],
+    ["pfz", "Fishing zone", "मछली क्षेत्र"],
+    ["recommendation", "Assessment", "आकलन"],
   ];
 
   const RISK_COLORS = {
-    LOW: "var(--low)",
-    MODERATE: "var(--moderate)",
-    HIGH: "var(--high)",
-    SEVERE: "var(--severe)",
-    UNKNOWN: "var(--unknown)",
+    LOW: "var(--low)", MODERATE: "var(--moderate)", HIGH: "var(--high)",
+    SEVERE: "var(--severe)", UNKNOWN: "var(--unknown)",
   };
 
   const LOADING_MESSAGES = [
-    "Reading the planner's route…",
-    "Pulling wind and wave forecasts…",
-    "Checking tide stations…",
-    "Scanning for active cyclones…",
-    "Cross-checking coastal boundaries…",
-    "Assembling the final assessment…",
+    "Reading the planner's route\u2026",
+    "Pulling wind and wave forecasts\u2026",
+    "Checking tide stations\u2026",
+    "Scanning for active cyclones\u2026",
+    "Cross-checking coastal boundaries\u2026",
+    "Assembling the final assessment\u2026",
+  ];
+  const LOADING_MESSAGES_HI = [
+    "मार्ग पढ़ा जा रहा है\u2026",
+    "हवा और लहर का पूर्वानुमान लिया जा रहा है\u2026",
+    "ज्वार केंद्रों की जांच हो रही है\u2026",
+    "सक्रिय चक्रवातों की तलाश हो रही है\u2026",
+    "तटीय सीमाओं की जांच हो रही है\u2026",
+    "अंतिम आकलन तैयार किया जा रहा है\u2026",
   ];
 
   const latEl = document.getElementById('lat');
@@ -544,10 +513,14 @@
   const runBtn = document.getElementById('runBtn');
   const presets = document.getElementById('presets');
   const pipelineWrap = document.getElementById('pipeline');
-  const pipelineScroll = document.getElementById('pipelineScroll');
+  const pipelineList = document.getElementById('pipelineList');
   const loadingLine = document.getElementById('loadingLine');
   const loadingText = document.getElementById('loadingText');
-  const errorPanel = document.getElementById('errorPanel');
+  const faultPanel = document.getElementById('faultPanel');
+  const faultTitle = document.getElementById('faultTitle');
+  const faultBody = document.getElementById('faultBody');
+  const faultRetry = document.getElementById('faultRetry');
+  const placeholder = document.getElementById('placeholder');
   const results = document.getElementById('results');
 
   presets.addEventListener('click', (e) => {
@@ -560,8 +533,8 @@
   });
 
   function renderPipeline(activeIndex, requiredSet) {
-    pipelineScroll.innerHTML = '';
-    PIPELINE_NODES.forEach(([key, label], i) => {
+    pipelineList.innerHTML = '';
+    PIPELINE_NODES.forEach(([key, label, labelHi], i) => {
       const node = document.createElement('div');
       let state = 'pending';
       const isCore = key === 'planner' || key === 'gis' || key === 'recommendation';
@@ -571,24 +544,24 @@
       else if (i < activeIndex) state = 'done';
       else if (i === activeIndex) state = 'active';
 
-      node.className = `pnode ${state}`;
-      node.innerHTML = `<span class="pdot"></span><span class="plabel">${label}</span>`;
-      pipelineScroll.appendChild(node);
-
-      if (i < PIPELINE_NODES.length - 1) {
-        const arrow = document.createElement('div');
-        arrow.className = 'parrow';
-        arrow.textContent = '›';
-        pipelineScroll.appendChild(arrow);
-      }
+      node.className = `pstep ${state}`;
+      node.innerHTML = `<span class="pdot"></span><span class="plabel">${label} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${labelHi}</span></span>`;
+      pipelineList.appendChild(node);
     });
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  function showPlaceholder() {
+    placeholder.style.display = '';
+    faultPanel.classList.remove('show');
+    results.classList.remove('show');
+  }
+
+  function showFault(status, message) {
+    placeholder.style.display = 'none';
+    results.classList.remove('show');
+    faultTitle.textContent = status;
+    faultBody.textContent = message;
+    faultPanel.classList.add('show');
   }
 
   async function runAssessment() {
@@ -597,27 +570,28 @@
     const question = questionEl.value.trim();
 
     if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      showError('Enter a valid latitude and longitude.');
+      showFault('BAD COORDINATES', 'Enter a valid latitude and longitude before running an assessment. / सही अक्षांश और देशांतर दर्ज करें।');
       return;
     }
     if (!question) {
-      showError('Enter a question about the location.');
+      showFault('NO QUESTION', 'Enter a question about the location before running an assessment. / स्थान के बारे में एक प्रश्न दर्ज करें।');
       return;
     }
 
-    errorPanel.classList.remove('show');
+    faultPanel.classList.remove('show');
     results.classList.remove('show');
+    placeholder.style.display = 'none';
     runBtn.disabled = true;
-    runBtn.textContent = 'Running…';
+    runBtn.textContent = 'Running\u2026';
     pipelineWrap.classList.add('show');
     loadingLine.classList.add('show');
     renderPipeline(0, null);
 
     let msgIndex = 0;
-    loadingText.textContent = LOADING_MESSAGES[0];
+    loadingText.innerHTML = `${LOADING_MESSAGES[0]} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${LOADING_MESSAGES_HI[0]}</span>`;
     const msgTimer = setInterval(() => {
       msgIndex = (msgIndex + 1) % LOADING_MESSAGES.length;
-      loadingText.textContent = LOADING_MESSAGES[msgIndex];
+      loadingText.innerHTML = `${LOADING_MESSAGES[msgIndex]} <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ ${LOADING_MESSAGES_HI[msgIndex]}</span>`;
       const stepIndex = Math.min(msgIndex + 1, PIPELINE_NODES.length - 1);
       renderPipeline(stepIndex, null);
     }, 2600);
@@ -632,8 +606,23 @@
       clearInterval(msgTimer);
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Request failed (${res.status})`);
+        let detail = '';
+        try {
+          const body = await res.json();
+          detail = body.detail || '';
+        } catch (_) { /* body wasn't JSON */ }
+
+        if (res.status === 502 || res.status === 504) {
+          showFault(
+            `NO SIGNAL (${res.status})`,
+            "One of ORCAWA's marine data sources didn't respond in time \u2014 this can happen when a backend is cold-starting. Wait about a minute and try again. / ORCAWA के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।"
+          );
+        } else if (res.status >= 500) {
+          showFault(`INSTRUMENT FAULT (${res.status})`, detail || 'The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।');
+        } else {
+          showFault(`REQUEST REJECTED (${res.status})`, detail || 'Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।');
+        }
+        return;
       }
 
       const data = await res.json();
@@ -645,17 +634,12 @@
 
     } catch (err) {
       clearInterval(msgTimer);
-      showError(err.message || 'Something went wrong while running the assessment.');
+      showFault('NO SIGNAL', "Couldn't reach ORCAWA's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
     } finally {
       loadingLine.classList.remove('show');
       runBtn.disabled = false;
       runBtn.textContent = 'Run assessment';
     }
-  }
-
-  function showError(message) {
-    errorPanel.textContent = message;
-    errorPanel.classList.add('show');
   }
 
   function renderResults(data, latitude, longitude) {
@@ -669,7 +653,7 @@
 
     document.getElementById('locValue').textContent = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
     document.getElementById('locSub').textContent =
-      `${plan.date || 'today'} · assessed in ${data.duration_seconds ?? '—'}s`;
+      `${plan.date || 'today'} \u00b7 assessed in ${data.duration_seconds ?? '\u2014'}s`;
 
     document.getElementById('summaryText').textContent =
       rec.summary || 'No summary was returned for this location.';
@@ -677,9 +661,9 @@
     const recBanner = document.getElementById('recBanner');
     const recText = rec.recommendation && rec.recommendation.trim();
     document.getElementById('recText').textContent =
-      recText || 'No specific recommendation was returned — review the findings below.';
-    recBanner.style.borderColor = recText ? 'rgba(95,185,139,0.35)' : 'rgba(201,161,90,0.35)';
-    recBanner.style.background = recText ? 'rgba(95,185,139,0.08)' : 'rgba(201,161,90,0.08)';
+      recText || 'No specific recommendation was returned \u2014 review the findings below.';
+    recBanner.style.borderColor = recText ? 'rgba(95,185,139,0.32)' : 'rgba(201,161,90,0.32)';
+    recBanner.style.background = recText ? 'rgba(95,185,139,0.07)' : 'rgba(201,161,90,0.07)';
 
     const findingsList = document.getElementById('findingsList');
     findingsList.innerHTML = '';
@@ -704,11 +688,12 @@
     document.getElementById('rawData').textContent =
       JSON.stringify(rec.agent_findings || {}, null, 2);
 
+    faultPanel.classList.remove('show');
     results.classList.add('show');
-    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   runBtn.addEventListener('click', runAssessment);
+  faultRetry.addEventListener('click', runAssessment);
   questionEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAssessment();
   });
