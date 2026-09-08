@@ -15,6 +15,7 @@ python-dotenv
 requests
 pandas
 numpy
+global-land-mask
 
 openmeteo-requests
 requests-cache
