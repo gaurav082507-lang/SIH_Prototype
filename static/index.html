@@ -49,14 +49,14 @@
     letter-spacing:0;
   }
   .hero h1 .hi{
-    font-size:0.56em;
+    font-size:0.5em;
     color:var(--text-muted);
-    margin-top:8px;
+    margin-top:10px;
     font-weight:400;
     line-height:1.3;
   }
   .hero p .hi{
-    margin-top:6px;
+    margin:6px auto 0;
     color:var(--text-faint);
     font-size:0.95em;
   }
@@ -77,8 +77,8 @@
     font-family:var(--sans);
     color:var(--text);
     background:
-      radial-gradient(ellipse 900px 500px at 12% -8%, rgba(18,60,82,0.5), transparent 60%),
-      radial-gradient(ellipse 700px 600px at 105% 8%, rgba(201,161,90,0.07), transparent 55%),
+      radial-gradient(ellipse 900px 500px at 50% -8%, rgba(18,60,82,0.5), transparent 60%),
+      radial-gradient(ellipse 700px 600px at 100% 8%, rgba(201,161,90,0.07), transparent 55%),
       linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%);
     min-height:100vh;
     line-height:1.5;
@@ -108,27 +108,37 @@
   nav.top-links{display:flex; gap:24px; font-size:13.5px; color:var(--text-muted);}
   @media (max-width:640px){ nav.top-links{display:none;} }
 
-  /* ---------------- Hero (Centered) ---------------- */
-  .hero{padding:48px 0 36px; max-width:640px; margin:0 auto; text-align:center;}
+  /* ---------------- Hero (centered) ---------------- */
+  .hero{
+    padding:56px 0 40px;
+    max-width:680px;
+    margin:0 auto;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
   .hero h1{
     font-family:var(--serif);
     font-weight:500;
     font-size:clamp(30px, 4.4vw, 46px);
     line-height:1.14;
-    margin:0 0 16px;
+    margin:0 0 18px;
   }
   .hero p{font-size:16px; color:var(--text-muted); margin:0 auto; max-width:52ch;}
 
-  /* ---------------- Two-pane layout ---------------- */
+  /* ---------------- Two-pane layout (centered as a block) ---------------- */
   .console-shell{
     display:grid;
     grid-template-columns: 400px 1fr;
     gap:22px;
     align-items:start;
     padding-bottom:64px;
+    max-width:980px;
+    margin:0 auto;
   }
   @media (max-width:920px){
-    .console-shell{grid-template-columns:1fr;}
+    .console-shell{grid-template-columns:1fr; max-width:520px;}
   }
 
   .console{
@@ -247,6 +257,11 @@
     text-align:center;
     color:var(--text-faint);
     font-size:14.5px;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
   }
   .placeholder strong{display:block; color:var(--text-muted); font-family:var(--serif); font-size:19px; font-weight:500; margin-bottom:8px;}
 
@@ -314,6 +329,9 @@
     margin:20px 0 40px; padding-top:20px; border-top:1px solid var(--line-soft);
     font-size:12px; color:var(--text-faint);
     display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    max-width:980px;
+    margin-left:auto;
+    margin-right:auto;
   }
 
   @media (prefers-reduced-motion: reduce){
