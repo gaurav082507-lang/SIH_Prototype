@@ -92,7 +92,7 @@ TIDE_API_URL = os.getenv("TIDE_API_URL", "https://orca-backend-tide.onrender.com
 # with no timeout set, requests.Timeout can never actually be raised, so
 # every attempt effectively has unlimited time to respond before the
 # retry loop would move on.
-TIDE_TIMEOUT_S = float(os.getenv("TIDE_TIMEOUT_S", "50"))
+TIDE_TIMEOUT_S = float(os.getenv("TIDE_TIMEOUT_S", "90"))
 TIDE_RETRIES = int(os.getenv("TIDE_RETRIES", "2"))          # attempts after the first
 TIDE_BACKOFF_S = float(os.getenv("TIDE_BACKOFF_S", "2.0"))
 
