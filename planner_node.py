@@ -14,7 +14,6 @@ import re
 from datetime import date as _date
 
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 from langchain_google_genai import ChatGoogleGenerativeAI
