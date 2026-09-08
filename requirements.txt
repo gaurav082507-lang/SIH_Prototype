@@ -9,6 +9,7 @@ langchain-core
 langchain-groq
 langchain-mistralai
 pydantic
+langchain-google-genai
 python-dotenv
 
 requests
