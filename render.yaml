@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: meridian-marine-intelligence
+    runtime: python
+    plan: starter
+    region: singapore
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: CYCLONE_API_BASE_URL
+        value: https://orca-backend-gkvo.onrender.com/api/cyclone
+      - key: TIDE_API_URL
+        value: https://orca-backend-tide.onrender.com/tide
+      - key: GIS_API_URL
+        value: https://orca-backend-gis.onrender.com/api/gis
+      - key: ALLOWED_ORIGINS
+        value: "*"
