@@ -3,6 +3,8 @@ import time
 import traceback
 from pathlib import Path
 from typing import Any, Iterator
+from threading import Thread
+from queue import Queue, Empty
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
@@ -18,17 +20,6 @@ from graph import marine_graph
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Your repository structure is:
-#
-# src/
-# ├── server.py
-# ├── static/
-# │   └── index.html
-# ├── graph.py
-# ├── schemas.py
-# └── ...
-#
-# Therefore static files live here:
 STATIC_DIR = BASE_DIR / "static"
 INDEX_FILE = STATIC_DIR / "index.html"
 
@@ -60,20 +51,16 @@ if STATIC_DIR.exists():
 
 
 # ============================================================
-# REQUEST SCHEMA
+# REQUEST MODEL
 # ============================================================
 
 # IMPORTANT:
-# Do NOT import AskRequest from schemas.py.
-# Your current schemas.py does not contain AskRequest.
+# AskRequest is defined here.
 #
-# The frontend sends:
+# Do NOT use:
+# from schemas import AskRequest
 #
-# {
-#     "latitude": 19.076,
-#     "longitude": 72.8777,
-#     "question": "Is it safe to venture into the sea tomorrow morning?"
-# }
+# because your current schemas.py does not expose AskRequest.
 
 class AskRequest(BaseModel):
     latitude: float = Field(
@@ -100,26 +87,25 @@ class AskRequest(BaseModel):
 @app.get("/")
 def home():
     """
-    Serve the ORCAWA frontend.
+    Serve ORCAWA frontend.
 
-    Expected structure:
+    Expected Render structure:
 
     src/
     ├── server.py
-    └── static/
-        └── index.html
+    ├── static/
+    │   └── index.html
+    ├── graph.py
+    └── ...
     """
 
-    # Primary location
     if INDEX_FILE.exists():
         return FileResponse(
             str(INDEX_FILE),
             media_type="text/html",
         )
 
-    # Extra fallback:
-    # This makes deployment more tolerant if index.html
-    # accidentally exists beside server.py.
+    # Extra fallback
     fallback_index = BASE_DIR / "index.html"
 
     if fallback_index.exists():
@@ -144,7 +130,7 @@ def home():
 @app.get("/health")
 def health():
     """
-    Health check endpoint for Render.
+    Render health check.
     """
 
     return {
@@ -172,21 +158,12 @@ def api_info():
 
 
 # ============================================================
-# JSON / SERIALIZATION HELPERS
+# JSON HELPERS
 # ============================================================
 
 def _clean_for_json(value: Any) -> Any:
     """
-    Convert potentially complex Python objects into
-    JSON-safe values.
-
-    Handles:
-    - dict
-    - list
-    - tuple
-    - Pydantic models
-    - primitive values
-    - custom objects
+    Convert arbitrary Python values into JSON-safe values.
     """
 
     if value is None:
@@ -236,7 +213,7 @@ def _clean_for_json(value: Any) -> Any:
 
 def _sse(event: dict[str, Any]) -> str:
     """
-    Convert a Python dictionary into a Server-Sent Event.
+    Convert a dictionary into a Server-Sent Event.
 
     Example:
 
@@ -247,21 +224,41 @@ def _sse(event: dict[str, Any]) -> str:
     safe_event = _clean_for_json(event)
 
     return (
-        f"data: {json.dumps(safe_event, ensure_ascii=False)}"
-        "\n\n"
+        "data: "
+        + json.dumps(
+            safe_event,
+            ensure_ascii=False,
+        )
+        + "\n\n"
     )
 
 
 # ============================================================
-# STATE EXTRACTION HELPERS
+# STATE HELPERS
 # ============================================================
 
-def _parse_plan(state: dict[str, Any]) -> Any:
+def _build_initial_state(
+    payload: AskRequest,
+) -> dict[str, Any]:
     """
-    Safely extract planner output.
+    Build the initial LangGraph state.
 
-    Different versions of the planner may store the plan
-    under different keys.
+    This keeps the same contract as the existing server.
+    """
+
+    return {
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "user_question": payload.question.strip(),
+        "status": "STARTED",
+    }
+
+
+def _parse_plan(
+    state: dict[str, Any],
+) -> Any:
+    """
+    Extract planner output from graph state.
     """
 
     possible_keys = [
@@ -304,7 +301,7 @@ def _normalize_recommendation(
     state: dict[str, Any],
 ) -> Any:
     """
-    Safely extract final recommendation.
+    Extract final recommendation from graph state.
     """
 
     possible_keys = [
@@ -326,68 +323,36 @@ def _normalize_recommendation(
 
 
 # ============================================================
-# INITIAL GRAPH STATE
-# ============================================================
-
-def _build_initial_state(
-    payload: AskRequest,
-) -> dict[str, Any]:
-    """
-    Build the state expected by the marine graph.
-    """
-
-    return {
-        "latitude": payload.latitude,
-        "longitude": payload.longitude,
-        "user_question": payload.question.strip(),
-        "status": "STARTED",
-    }
-
-
-# ============================================================
-# NORMAL / NON-STREAMING ASK ENDPOINT
+# NORMAL ASK ENDPOINT
 # ============================================================
 
 @app.post("/api/ask")
 def ask(payload: AskRequest):
     """
-    Execute the complete marine LangGraph and return
-    the final result.
+    Normal non-streaming graph execution.
     """
 
-    initial_state = _build_initial_state(payload)
+    initial_state = _build_initial_state(
+        payload
+    )
 
     started = time.monotonic()
 
     try:
 
-        # ----------------------------------------------------
-        # Execute graph
-        # ----------------------------------------------------
-
         final_state = marine_graph.invoke(
             initial_state
         )
 
-        # ----------------------------------------------------
-        # Safety check
-        # ----------------------------------------------------
-
         if not isinstance(final_state, dict):
-            final_state = dict(initial_state)
-
-        # ----------------------------------------------------
-        # Duration
-        # ----------------------------------------------------
+            final_state = dict(
+                initial_state
+            )
 
         duration = round(
             time.monotonic() - started,
             2,
         )
-
-        # ----------------------------------------------------
-        # Response
-        # ----------------------------------------------------
 
         return {
             "status": "SUCCESS",
@@ -402,7 +367,9 @@ def ask(payload: AskRequest):
             ),
 
             "recommendation": _clean_for_json(
-                _normalize_recommendation(final_state)
+                _normalize_recommendation(
+                    final_state
+                )
             ),
 
             "state": _clean_for_json(
@@ -418,7 +385,6 @@ def ask(payload: AskRequest):
 
         return {
             "status": "ERROR",
-
             "message": str(exc),
 
             "latitude": payload.latitude,
@@ -429,32 +395,104 @@ def ask(payload: AskRequest):
 
 
 # ============================================================
-# STREAMING GRAPH EXECUTION
+# BACKGROUND GRAPH WORKER
+# ============================================================
+
+def _run_graph_worker(
+    initial_state: dict[str, Any],
+    event_queue: Queue,
+):
+    """
+    Run LangGraph in a background thread.
+
+    Why?
+
+    Previously:
+
+        HTTP request
+              |
+              v
+        marine_graph.stream()
+              |
+              v
+        wait...
+
+    If a node took a long time, nothing was sent to
+    the browser during that period.
+
+    Now:
+
+        HTTP request
+              |
+              +----------------------+
+              |                      |
+              v                      v
+        SSE generator          Graph worker
+              |                      |
+              |                      v
+              |                marine_graph
+              |                      |
+              +<----- Queue <--------+
+    """
+
+    try:
+
+        for step_output in marine_graph.stream(
+            initial_state,
+            stream_mode="updates",
+        ):
+
+            event_queue.put(
+                (
+                    "graph_update",
+                    step_output,
+                )
+            )
+
+        # Graph finished normally
+        event_queue.put(
+            (
+                "graph_finished",
+                None,
+            )
+        )
+
+    except Exception as exc:
+
+        traceback.print_exc()
+
+        event_queue.put(
+            (
+                "graph_error",
+                exc,
+            )
+        )
+
+
+# ============================================================
+# STREAMING ENDPOINT
 # ============================================================
 
 def _stream_ask_events(
     payload: AskRequest,
 ) -> Iterator[str]:
     """
-    Execute LangGraph using stream_mode='updates'
-    and convert every completed node into an SSE event.
+    Robust Server-Sent Event stream.
 
-    The frontend expects events like:
+    This version:
 
-    {
-        "type": "node_done",
-        "node": "planner"
-    }
-
-    and finally:
-
-    {
-        "type": "final",
-        ...
-    }
+    1. Immediately tells frontend the stream started.
+    2. Runs LangGraph in a background thread.
+    3. Sends heartbeat events while graph nodes are running.
+    4. Sends node_done when a LangGraph update arrives.
+    5. Sends planner data when planner completes.
+    6. Sends final when graph finishes.
+    7. Sends error if graph crashes.
     """
 
-    initial_state = _build_initial_state(payload)
+    initial_state = _build_initial_state(
+        payload
+    )
 
     started = time.monotonic()
 
@@ -464,207 +502,280 @@ def _stream_ask_events(
 
     completed_nodes: list[str] = []
 
-    final_sent = False
+    event_queue: Queue = Queue()
 
-    # --------------------------------------------------------
-    # Tell frontend that stream has started
-    # --------------------------------------------------------
+    # ========================================================
+    # START EVENT
+    # ========================================================
 
     yield _sse({
         "type": "stream_started",
         "status": "STARTED",
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
     })
 
-    try:
+    # ========================================================
+    # START GRAPH WORKER
+    # ========================================================
 
-        # ----------------------------------------------------
-        # Stream LangGraph
-        # ----------------------------------------------------
-
-        stream = marine_graph.stream(
+    worker = Thread(
+        target=_run_graph_worker,
+        args=(
             initial_state,
-            stream_mode="updates",
-        )
+            event_queue,
+        ),
+        daemon=True,
+    )
 
-        for step_output in stream:
+    worker.start()
 
-            # ------------------------------------------------
-            # Ignore unexpected output
-            # ------------------------------------------------
+    # ========================================================
+    # STREAM LOOP
+    # ========================================================
 
-            if not isinstance(step_output, dict):
+    graph_finished = False
+
+    while not graph_finished:
+
+        try:
+
+            # Wait at most 2 seconds.
+            #
+            # If no graph update arrives, we send
+            # a heartbeat instead of allowing the HTTP
+            # connection to remain silent.
+
+            event_type, data = event_queue.get(
+                timeout=2.0
+            )
+
+        except Empty:
+
+            elapsed = round(
+                time.monotonic() - started,
+                1,
+            )
+
+            yield _sse({
+                "type": "heartbeat",
+                "status": "RUNNING",
+                "elapsed_seconds": elapsed,
+                "completed_nodes": completed_nodes,
+            })
+
+            continue
+
+        # ====================================================
+        # GRAPH UPDATE
+        # ====================================================
+
+        if event_type == "graph_update":
+
+            step_output = data
+
+            if not isinstance(
+                step_output,
+                dict,
+            ):
                 continue
 
-            # ------------------------------------------------
-            # LangGraph update usually looks like:
-            #
-            # {
-            #     "planner": {
-            #         ...
-            #     }
-            # }
-            #
-            # or:
-            #
-            # {
-            #     "weather": {
-            #         ...
-            #     }
-            # }
-            # ------------------------------------------------
+            for node_name, node_update in (
+                step_output.items()
+            ):
 
-            for node_name, node_update in step_output.items():
+                node_name = str(
+                    node_name
+                )
 
-                node_name = str(node_name)
-
-                # Avoid duplicate completion events
+                # Avoid duplicate node names
                 if node_name not in completed_nodes:
-                    completed_nodes.append(node_name)
+                    completed_nodes.append(
+                        node_name
+                    )
 
-                # ------------------------------------------------
+                # --------------------------------------------
                 # Merge graph state
-                # ------------------------------------------------
+                # --------------------------------------------
 
-                if isinstance(node_update, dict):
+                if isinstance(
+                    node_update,
+                    dict,
+                ):
 
                     final_state.update(
                         node_update
                     )
 
-                # ------------------------------------------------
-                # Build node completion event
-                # ------------------------------------------------
+                # --------------------------------------------
+                # Build node event
+                # --------------------------------------------
 
-                event: dict[str, Any] = {
+                event = {
                     "type": "node_done",
                     "node": node_name,
                 }
 
-                # ------------------------------------------------
-                # Planner event
-                # ------------------------------------------------
+                # --------------------------------------------
+                # Planner result
+                # --------------------------------------------
 
                 if node_name == "planner":
 
-                    event["plan"] = _clean_for_json(
-                        _parse_plan(final_state)
+                    event["plan"] = (
+                        _clean_for_json(
+                            _parse_plan(
+                                final_state
+                            )
+                        )
                     )
 
-                # ------------------------------------------------
-                # Send event immediately
-                # ------------------------------------------------
+                # --------------------------------------------
+                # Send node event
+                # --------------------------------------------
 
                 yield _sse(event)
 
-                # ------------------------------------------------
-                # Small heartbeat event.
-                #
-                # This helps keep the HTTP stream alive on
-                # deployment platforms/proxies.
-                # ------------------------------------------------
-
-                yield _sse({
-                    "type": "heartbeat",
-                    "node": node_name,
-                })
-
         # ====================================================
-        # GRAPH COMPLETED SUCCESSFULLY
+        # GRAPH FINISHED
         # ====================================================
 
-        duration = round(
-            time.monotonic() - started,
-            2,
-        )
+        elif event_type == "graph_finished":
 
-        final_event = {
-            "type": "final",
-            "status": "SUCCESS",
+            graph_finished = True
 
-            "latitude": payload.latitude,
-            "longitude": payload.longitude,
+        # ====================================================
+        # GRAPH ERROR
+        # ====================================================
 
-            "question": payload.question,
+        elif event_type == "graph_error":
 
-            "plan": _clean_for_json(
-                _parse_plan(final_state)
-            ),
+            exc = data
 
-            "completed_nodes": completed_nodes,
+            duration = round(
+                time.monotonic() - started,
+                2,
+            )
 
-            "recommendation": _clean_for_json(
-                _normalize_recommendation(final_state)
-            ),
+            # Send explicit error event
+            yield _sse({
+                "type": "error",
+                "status": "ERROR",
+                "detail": str(exc),
+                "completed_nodes": completed_nodes,
+                "duration_seconds": duration,
+            })
 
-            "duration_seconds": duration,
-        }
+            # Also send a final event with ERROR status.
+            #
+            # This is useful because the frontend is designed
+            # around the final event as the terminal state.
 
-        final_sent = True
+            yield _sse({
+                "type": "final",
+                "status": "ERROR",
 
-        yield _sse(final_event)
+                "latitude": payload.latitude,
+                "longitude": payload.longitude,
 
-    except Exception as exc:
+                "question": payload.question,
 
-        # ----------------------------------------------------
-        # IMPORTANT:
-        # Never allow the generator to silently terminate.
-        # The frontend otherwise displays:
-        #
-        # "The pipeline stream ended without a final result."
-        # ----------------------------------------------------
+                "plan": _clean_for_json(
+                    _parse_plan(
+                        final_state
+                    )
+                ),
 
-        traceback.print_exc()
+                "completed_nodes": completed_nodes,
 
-        duration = round(
-            time.monotonic() - started,
-            2,
-        )
+                "recommendation": None,
 
-        # Send explicit error event
-        yield _sse({
-            "type": "error",
-            "status": "ERROR",
-            "detail": str(exc),
-            "completed_nodes": completed_nodes,
-            "duration_seconds": duration,
-        })
+                "duration_seconds": duration,
 
-        # Do NOT send another final event after an error.
-        # The frontend already handles the error event.
+                "error": str(exc),
+            })
+
+            return
+
+    # ========================================================
+    # GRAPH SUCCESSFULLY COMPLETED
+    # ========================================================
+
+    duration = round(
+        time.monotonic() - started,
+        2,
+    )
+
+    final_event = {
+        "type": "final",
+        "status": "SUCCESS",
+
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+
+        "question": payload.question,
+
+        "plan": _clean_for_json(
+            _parse_plan(final_state)
+        ),
+
+        "completed_nodes": completed_nodes,
+
+        "recommendation": _clean_for_json(
+            _normalize_recommendation(
+                final_state
+            )
+        ),
+
+        "duration_seconds": duration,
+    }
+
+    yield _sse(final_event)
 
 
 # ============================================================
-# STREAMING ENDPOINT
+# STREAM API
 # ============================================================
 
 @app.post("/api/ask/stream")
-def ask_stream(payload: AskRequest):
+def ask_stream(
+    payload: AskRequest,
+):
     """
-    Streaming endpoint used by the ORCAWA frontend.
+    Streaming ORCAWA assessment endpoint.
     """
 
     return StreamingResponse(
-        _stream_ask_events(payload),
+
+        _stream_ask_events(
+            payload
+        ),
 
         media_type="text/event-stream",
 
         headers={
-            # Prevent proxy buffering
-            "X-Accel-Buffering": "no",
 
-            # Do not cache stream
+            # Never cache SSE
             "Cache-Control": (
-                "no-cache, no-store, "
+                "no-cache, "
+                "no-store, "
                 "must-revalidate"
             ),
 
-            # Keep HTTP connection alive
+            # Disable proxy buffering
+            "X-Accel-Buffering": "no",
+
+            # Keep connection alive
             "Connection": "keep-alive",
 
-            # Explicit SSE header
+            # Explicit SSE content type
             "Content-Type": (
                 "text/event-stream; "
                 "charset=utf-8"
             ),
+
+            # Helps prevent some intermediaries
+            # from buffering the response.
+            "X-Content-Type-Options": "nosniff",
         },
     )
