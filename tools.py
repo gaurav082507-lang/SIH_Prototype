@@ -1,3 +1,4 @@
+# AFTER — top of file
 import json
 import math
 import os
@@ -11,7 +12,6 @@ import openmeteo_requests
 from dotenv import load_dotenv
 from retry_requests import retry
 from langchain_core.tools import tool
-from global_land_mask import globe
 
 load_dotenv()
 
