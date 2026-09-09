@@ -42,6 +42,13 @@ from pydantic import BaseModel, Field
 
 from graph import marine_graph, route_after_planner
 
+try:
+    # Optional: present once graph.py wraps its nodes with deadlines.
+    # Guarded so an older graph.py cannot stop the app from booting.
+    from node_timeout import all_timeouts
+except ImportError:  # pragma: no cover
+    all_timeouts = None
+
 
 # ============================================================
 # PATHS
@@ -217,7 +224,7 @@ app = FastAPI(
     ),
     # Bump this whenever the wire behaviour changes — /api/health is the
     # only way to tell from outside which build Render is actually running.
-    version="1.3.0",
+    version="1.5.0",
 )
 
 
@@ -400,6 +407,7 @@ def _health_payload() -> dict[str, Any]:
         "heartbeat_seconds": HEARTBEAT_INTERVAL_S,
         "graph_timeout_seconds": GRAPH_TIMEOUT_S,
         "memory_rss_mb": _rss_mb(),
+        "node_timeouts": all_timeouts(ALL_NODES) if all_timeouts else None,
         "graph_nodes": list(ALL_NODES),
         "frontend": INDEX_FILE.exists(),
     }
@@ -776,6 +784,7 @@ def _node_event(
 
         event["plan"] = plan
         event["rejected"] = bool(plan.get("rejected", False))
+        event["timed_out"] = bool(plan.get("timed_out", False))
         event["rejection_reason"] = plan.get("rejection_reason")
         event["planned_nodes"] = planned
         event["skipped_nodes"] = [
@@ -818,6 +827,7 @@ def _final_event(
         "question": payload.question,
         "plan": plan,
         "rejected": bool(plan.get("rejected", False)),
+        "timed_out": bool(plan.get("timed_out", False)),
         "rejection_reason": plan.get("rejection_reason"),
         "recommendation": _recommendation_of(state),
         # Raw per-specialist envelopes, straight from MarineState. The
@@ -1003,8 +1013,19 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
     event_queue: asyncio.Queue = asyncio.Queue()
 
     def emit(item) -> None:
-        """Called from the graph worker thread."""
-        loop.call_soon_threadsafe(event_queue.put_nowait, item)
+        """
+        Called from the graph worker thread.
+
+        If the client disconnected, this generator is gone and the loop
+        may already be closed, while the worker keeps running to
+        completion. That is expected — swallow it rather than filling
+        the logs with tracebacks nobody can act on.
+        """
+
+        try:
+            loop.call_soon_threadsafe(event_queue.put_nowait, item)
+        except RuntimeError:
+            pass
 
     yield _sse(
         {
@@ -1015,6 +1036,11 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
             "question": payload.question,
             "nodes": list(ALL_NODES),
         }
+    )
+
+    _log(
+        f"run started rss={_rss_mb()}MB "
+        f"lat={payload.latitude} lon={payload.longitude}"
     )
 
     worker = Thread(
@@ -1064,11 +1090,24 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
 
                     return
 
+                # RSS rides along on every heartbeat. If the process is
+                # being killed for exceeding the instance's memory, the
+                # last heartbeat the browser received is the last
+                # reading before death — which is the only evidence a
+                # SIGKILL leaves anywhere.
+                rss = _rss_mb()
+
+                _log(
+                    f"heartbeat {elapsed:.0f}s rss={rss}MB "
+                    f"completed={completed or '[]'}"
+                )
+
                 yield _sse(
                     {
                         "type": "heartbeat",
                         "status": "RUNNING",
                         "elapsed_seconds": round(elapsed, 1),
+                        "memory_rss_mb": rss,
                         "completed_nodes": list(completed),
                     }
                 )
