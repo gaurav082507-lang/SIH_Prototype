@@ -50,7 +50,7 @@ services:
       # Ceiling on one assessment, in seconds. The SSE stream sends a
       # final ERROR event instead of hanging if a marine service stalls.
       - key: GRAPH_TIMEOUT_SECONDS
-        value: "300"
+        value: "900"
 
       # Coastal check backend. "coastline" uses coastline.py (~0.7 MB).
       # "landmask" restores global_land_mask, which costs ~341 MB on
@@ -61,8 +61,8 @@ services:
       # Per-agent deadlines (node_timeout.py). An agent that overruns is
       # abandoned and reported as FAILED; the assessment still finishes.
       - key: AGENT_TIMEOUT_S
-        value: "60"
+        value: "120"
       - key: PLANNER_TIMEOUT_S
-        value: "90"
+        value: "180"
       - key: RECOMMENDATION_TIMEOUT_S
-        value: "90"
+        value: "180"
