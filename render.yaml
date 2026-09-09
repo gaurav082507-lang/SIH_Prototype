@@ -51,3 +51,18 @@ services:
       # final ERROR event instead of hanging if a marine service stalls.
       - key: GRAPH_TIMEOUT_SECONDS
         value: "300"
+
+      # Coastal check backend. "coastline" uses coastline.py (~0.7 MB).
+      # "landmask" restores global_land_mask, which costs ~341 MB on
+      # first call and will OOM-kill a 512 MB instance.
+      - key: COASTAL_CHECK_MODE
+        value: coastline
+
+      # Per-agent deadlines (node_timeout.py). An agent that overruns is
+      # abandoned and reported as FAILED; the assessment still finishes.
+      - key: AGENT_TIMEOUT_S
+        value: "60"
+      - key: PLANNER_TIMEOUT_S
+        value: "90"
+      - key: RECOMMENDATION_TIMEOUT_S
+        value: "90"
