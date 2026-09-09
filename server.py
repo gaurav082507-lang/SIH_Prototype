@@ -281,7 +281,7 @@ app = FastAPI(
     ),
     # Bump this whenever the wire behaviour changes — /api/health is the
     # only way to tell from outside which build Render is actually running.
-    version="1.8.0",
+    version="1.9.0",
 )
 
 
@@ -560,14 +560,16 @@ def selftest(
     one at a time here and watch `rss_mb_after`:
 
         /api/selftest?step=mem       - baseline memory, imports only
-        /api/selftest?step=coastal   - the land-mask coastal check
+        /api/selftest?step=coastal   - the local coastal check
+        /api/selftest?step=gis       - the GIS backend call, full
+                                       failure detail if it fails
         /api/selftest?step=planner   - the full planner node (LLM call)
 
     If a step never returns and the service restarts, that step is the
     one exhausting the instance.
     """
 
-    order = ["mem", "coastal", "planner"]
+    order = ["mem", "coastal", "gis", "planner"]
     steps = order if step == "all" else [step]
 
     results: list[dict[str, Any]] = []
@@ -593,6 +595,20 @@ def selftest(
                     )
                 )
                 entry["ok"] = True
+
+            elif name == "gis":
+                # gis_node collapses a failure to a single message,
+                # dropping error_code and the upstream body. This calls
+                # the tool directly so the whole failure dict — which
+                # of the six codes, and the first 500 characters the
+                # GIS service actually returned — is visible.
+                from gis_tool import GIS_API_URL, fetch_gis_data
+
+                entry["gis_api_url"] = GIS_API_URL
+                entry["result"] = _clean_for_json(
+                    fetch_gis_data(latitude=latitude, longitude=longitude)
+                )
+                entry["ok"] = bool(entry["result"].get("success"))
 
             elif name == "planner":
                 from planner_node import planner_node
