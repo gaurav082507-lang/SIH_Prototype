@@ -5,10 +5,16 @@
 # Planner selects the required specialists.
 # GIS runs for every accepted query.
 # The final recommendation waits for the selected specialist branches.
+#
+# Every node is wrapped by node_timeout.with_timeout, so one slow
+# marine service cannot hold the whole assessment open. Defaults are
+# 90s for the planner and the recommendation, 60s for each specialist;
+# see node_timeout.py for the environment variables.
 
 from langgraph.graph import StateGraph, START, END
 
 from state import MarineState
+from node_timeout import with_timeout
 from planner_node import planner_node
 from weather_node import weather_node
 from ocean_node import ocean_node
@@ -83,15 +89,22 @@ def route_after_planner(state: MarineState):
 
 builder = StateGraph(MarineState)
 
-builder.add_node("planner", planner_node)
-builder.add_node("weather", weather_node)
-builder.add_node("ocean", ocean_node)
-builder.add_node("tide", tide_node)
-builder.add_node("cyclone", cyclone_node)
-builder.add_node("ecosystem", ecosystem_node)
-builder.add_node("pfz", pfz_node)
-builder.add_node("gis", gis_node)
-builder.add_node("recommendation", recommendation_node)
+# with_timeout(name, fn, state_key) — state_key is the MarineState key
+# the node writes, used to shape its fallback if the deadline passes.
+# It defaults to "<name>_data", which is right for every specialist.
+
+builder.add_node("planner", with_timeout("planner", planner_node, "plan"))
+builder.add_node("weather", with_timeout("weather", weather_node))
+builder.add_node("ocean", with_timeout("ocean", ocean_node))
+builder.add_node("tide", with_timeout("tide", tide_node))
+builder.add_node("cyclone", with_timeout("cyclone", cyclone_node))
+builder.add_node("ecosystem", with_timeout("ecosystem", ecosystem_node))
+builder.add_node("pfz", with_timeout("pfz", pfz_node))
+builder.add_node("gis", with_timeout("gis", gis_node))
+builder.add_node(
+    "recommendation",
+    with_timeout("recommendation", recommendation_node, "recommendation"),
+)
 
 builder.add_edge(START, "planner")
 
