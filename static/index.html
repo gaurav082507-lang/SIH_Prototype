@@ -612,7 +612,7 @@
         <section class="results" id="results" aria-live="polite" aria-atomic="false">
 
           <div class="notice" id="rejectNotice">
-            <div class="panel-eyebrow">Out of scope<span class="hi">दायरे से बाहर</span></div>
+            <div class="panel-eyebrow" id="rejectTitle">Out of scope<span class="hi">दायरे से बाहर</span></div>
             <div id="rejectText"></div>
           </div>
 
@@ -1091,15 +1091,17 @@
     let eventCount = 0;
     let lastEventType = "none";
     let lastHeartbeat = null;
+    let lastRss = null;
 
     function onPlanner(evt) {
       const planned = Array.isArray(evt.planned_nodes) ? evt.planned_nodes : [];
       const all = specialistIds();
       plannedSpecialists = all.filter((id) => planned.indexOf(id) !== -1);
 
-      // A rejection is a valid planner outcome, not a planner failure.
+      // A rejection is a valid planner outcome, not a planner failure —
+      // but a planner that ran out of time genuinely did fail.
       const map = {};
-      map[topology.entry] = "done";
+      map[topology.entry] = evt.timed_out ? "failed" : "done";
       all.forEach((id) => {
         map[id] = plannedSpecialists.indexOf(id) !== -1 ? "active" : "skipped";
       });
@@ -1204,6 +1206,10 @@
           } else if (evt.type === "heartbeat") {
             // The server is alive; the elapsed clock is already local.
             lastHeartbeat = evt.elapsed_seconds;
+            if (evt.memory_rss_mb != null) {
+              lastRss = evt.memory_rss_mb;
+              progressNote.textContent = `server memory ${lastRss} MB`;
+            }
           } else if (evt.type === "final") {
             finalData = evt;
           } else if (evt.type === "error") {
@@ -1234,8 +1240,14 @@
           ? "The server accepted the request but sent nothing at all."
           : `The connection closed ${where}, ${eventCount} event${eventCount === 1 ? "" : "s"} in (last: ${lastEventType}${lastHeartbeat != null ? ", " + lastHeartbeat + "s" : ""}).`;
 
+        // The last memory reading before the connection died is the
+        // only trace a SIGKILL leaves.
+        const mem = lastRss != null
+          ? ` Server memory at the last heartbeat: ${lastRss} MB.`
+          : "";
+
         showFault("CONNECTION DROPPED",
-          detail + " The server was cut off mid-run — check the service logs for a crash, restart or out-of-memory kill. / सर्वर बीच में बंद हो गया — सर्वर लॉग जांचें।");
+          detail + mem + " The server was cut off mid-run — check the service logs for a crash, restart or out-of-memory kill. / सर्वर बीच में बंद हो गया — सर्वर लॉग जांचें।");
       }
     } catch (err) {
       if (err && err.name === "AbortError") return;
@@ -1307,6 +1319,12 @@
     // Planner rejection is a legitimate outcome, not a failure.
     const rejectNotice = $("rejectNotice");
     if (data.rejected) {
+      // A timed-out planner also arrives as a rejection, but calling it
+      // "out of scope" would blame the user's question for a server
+      // problem.
+      $("rejectTitle").innerHTML = data.timed_out
+        ? bi("Timed out", "समय समाप्त")
+        : bi("Out of scope", "दायरे से बाहर");
       $("rejectText").textContent =
         data.rejection_reason ||
         "This question is outside what ORCAWA can assess for the given location.";
