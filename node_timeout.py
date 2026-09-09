@@ -1,6 +1,6 @@
 # node_timeout.py
 #
-# Per-node deadlines for the ORCAWA LangGraph pipeline.
+# Per-node deadlines for the Samudra LangGraph pipeline.
 #
 # Without this, one unresponsive marine service stalls the whole
 # assessment: the graph has no deadline of its own, so a specialist
@@ -67,7 +67,7 @@ _POOL_SIZE = int(_env_float("NODE_POOL_SIZE", 10.0))
 
 _EXECUTOR = ThreadPoolExecutor(
     max_workers=_POOL_SIZE,
-    thread_name_prefix="orcawa-node",
+    thread_name_prefix="samudra-node",
 )
 
 
