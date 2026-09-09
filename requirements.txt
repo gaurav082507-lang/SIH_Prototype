@@ -18,4 +18,9 @@ openmeteo-requests
 requests-cache
 retry-requests
 
-global-land-mask
+# global-land-mask
+#   No longer needed. It answered "is this point on land" by
+#   decompressing a global boolean raster into RAM — measured at
+#   +341 MB on first call, which OOM-killed the 512 MB instance.
+#   coastline.py replaces it at ~0.7 MB. Re-enable this line only
+#   if you set COASTAL_CHECK_MODE=landmask.
