@@ -1086,6 +1086,12 @@
     let finalData = null;
     let hardError = null;
 
+    // Kept so a stream that dies mid-run can say how far it got
+    // instead of the useless "ended without a final result".
+    let eventCount = 0;
+    let lastEventType = "none";
+    let lastHeartbeat = null;
+
     function onPlanner(evt) {
       const planned = Array.isArray(evt.planned_nodes) ? evt.planned_nodes : [];
       const all = specialistIds();
@@ -1189,11 +1195,15 @@
           let evt;
           try { evt = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
 
+          eventCount += 1;
+          lastEventType = evt.type || "unknown";
+
           if (evt.type === "node_done") {
             if (evt.node === topology.entry) onPlanner(evt);
             else onNodeDone(evt);
           } else if (evt.type === "heartbeat") {
             // The server is alive; the elapsed clock is already local.
+            lastHeartbeat = evt.elapsed_seconds;
           } else if (evt.type === "final") {
             finalData = evt;
           } else if (evt.type === "error") {
@@ -1213,8 +1223,19 @@
           hardError || (finalData && finalData.error) ||
           "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
       } else {
-        showFault("NO SIGNAL",
-          "The pipeline stream ended without a final result. Try again. / प्रक्रिया अधूरी समाप्त हुई, फिर कोशिश करें।");
+        // The connection closed with no terminal event. Report how far
+        // it got — that is the difference between "the server never
+        // answered" and "the server died part-way through the run".
+        const where = plannedSpecialists.length
+          ? `after the planner (${finishedSpecialists.size}/${plannedSpecialists.length} specialists done)`
+          : "before the planner finished";
+
+        const detail = eventCount === 0
+          ? "The server accepted the request but sent nothing at all."
+          : `The connection closed ${where}, ${eventCount} event${eventCount === 1 ? "" : "s"} in (last: ${lastEventType}${lastHeartbeat != null ? ", " + lastHeartbeat + "s" : ""}).`;
+
+        showFault("CONNECTION DROPPED",
+          detail + " The server was cut off mid-run — check the service logs for a crash, restart or out-of-memory kill. / सर्वर बीच में बंद हो गया — सर्वर लॉग जांचें।");
       }
     } catch (err) {
       if (err && err.name === "AbortError") return;
