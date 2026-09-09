@@ -71,7 +71,7 @@ HEARTBEAT_INTERVAL_S = float(os.getenv("SSE_HEARTBEAT_SECONDS", "2.0"))
 
 # Hard ceiling on a single assessment. Without this a hung upstream
 # marine service would keep an SSE connection alive forever.
-GRAPH_TIMEOUT_S = float(os.getenv("GRAPH_TIMEOUT_SECONDS", "300"))
+GRAPH_TIMEOUT_S = float(os.getenv("GRAPH_TIMEOUT_SECONDS", "900"))
 
 # Set SSE_LOG=0 to silence the per-run progress lines. They are on by
 # default because a stalled assessment is otherwise invisible in the
@@ -82,6 +82,63 @@ SSE_LOG = os.getenv("SSE_LOG", "1").strip().lower() not in ("0", "false", "no")
 def _log(message: str) -> None:
     if SSE_LOG:
         print(f"[stream] {message}", flush=True)
+
+
+# ============================================================
+# RUN TRACE
+# ============================================================
+#
+# When a worker process dies, everything it knew dies with it: no
+# traceback, no final event, and an in-memory record of what it was
+# doing is gone too. A SIGKILL cannot be caught, so the only way to
+# learn where a run stopped is to have written it down beforehand.
+#
+# Each step of a run is appended to a small file under /tmp, which
+# outlives the worker (uvicorn respawns it inside the same container).
+# GET /api/last-run reads it back, so the last thing the server managed
+# to do before it died is visible without reading any logs.
+
+RUN_TRACE_PATH = os.getenv("RUN_TRACE_PATH", "/tmp/samudra-last-run.json")
+
+# Enough to cover a long run; old steps are dropped rather than letting
+# the file grow without bound.
+MAX_TRACE_STEPS = 400
+
+
+def _trace_save(trace: dict[str, Any]) -> None:
+    """Write the trace out. Never raises — this is diagnostics."""
+
+    try:
+        temporary = f"{RUN_TRACE_PATH}.tmp"
+
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(trace, handle, ensure_ascii=False)
+
+        os.replace(temporary, RUN_TRACE_PATH)
+    except Exception:
+        pass
+
+
+def _trace_step(trace: dict[str, Any], what: str, **extra: Any) -> None:
+    """Record one step and flush immediately."""
+
+    step: dict[str, Any] = {
+        "at_seconds": round(time.monotonic() - trace["_started_monotonic"], 2),
+        "what": what,
+        "memory_rss_mb": _rss_mb(),
+    }
+    step.update(extra)
+
+    steps = trace["steps"]
+    steps.append(step)
+
+    if len(steps) > MAX_TRACE_STEPS:
+        del steps[: len(steps) - MAX_TRACE_STEPS]
+
+    # The whole point is that this is on disk BEFORE the next thing
+    # happens, so it is written every step rather than batched.
+    _trace_save({key: value for key, value in trace.items()
+                 if not key.startswith("_")})
 
 
 # ============================================================
@@ -224,7 +281,7 @@ app = FastAPI(
     ),
     # Bump this whenever the wire behaviour changes — /api/health is the
     # only way to tell from outside which build Render is actually running.
-    version="1.6.0",
+    version="1.7.0",
 )
 
 
@@ -441,11 +498,50 @@ def api_info():
         "endpoints": {
             "frontend": "/",
             "health": "/api/health",
+            "last_run": "/api/last-run",
             "selftest": "/api/selftest",
             "graph": "/api/graph",
             "ask": "/api/ask",
             "stream": "/api/ask/stream",
         },
+    }
+
+
+@app.get("/api/last-run")
+def last_run():
+    """
+    What the server was doing during the most recent assessment.
+
+    Written to disk step by step, so it survives the worker process
+    being killed — which is precisely the case where nothing else
+    survives. If a run ends with no `final` event, this says which node
+    it was in, how long it had been running and what memory looked
+    like at that moment.
+    """
+
+    try:
+        with open(RUN_TRACE_PATH, "r", encoding="utf-8") as handle:
+            trace = json.load(handle)
+    except FileNotFoundError:
+        return {
+            "available": False,
+            "reason": "no run recorded yet on this worker",
+            "path": RUN_TRACE_PATH,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"available": False, "reason": str(exc), "path": RUN_TRACE_PATH}
+
+    steps = trace.get("steps") or []
+    last = steps[-1] if steps else None
+
+    return {
+        "available": True,
+        "finished": trace.get("finished", False),
+        "outcome": trace.get("outcome"),
+        # The headline: if `finished` is false, this is where it stopped.
+        "stopped_after": last,
+        "current_memory_rss_mb": _rss_mb(),
+        "run": trace,
     }
 
 
@@ -1171,6 +1267,19 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
         }
     )
 
+    trace: dict[str, Any] = {
+        "_started_monotonic": started,
+        "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "question": payload.question,
+        "version": app.version,
+        "steps": [],
+        "finished": False,
+        "outcome": None,
+    }
+    _trace_step(trace, "run_started")
+
     _log(
         f"run started rss={_rss_mb()}MB "
         f"lat={payload.latitude} lon={payload.longitude}"
@@ -1196,6 +1305,10 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
 
                 if elapsed > GRAPH_TIMEOUT_S:
                     _log(f"timeout after {elapsed:.1f}s, completed={completed}")
+
+                    trace["finished"] = True
+                    trace["outcome"] = "TIMEOUT"
+                    _trace_step(trace, "graph_timeout")
 
                     yield _sse(
                         {
@@ -1235,6 +1348,15 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
                     f"completed={completed or '[]'}"
                 )
 
+                # Recorded too: while a node is working there are no
+                # other events, so these are the only marks on the
+                # timeline if the worker dies mid-node.
+                _trace_step(
+                    trace,
+                    "heartbeat",
+                    running_after=completed[-1] if completed else None,
+                )
+
                 yield _sse(
                     {
                         "type": "heartbeat",
@@ -1272,6 +1394,12 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
                     )
 
                     _log(f"node_done {node_name} -> {event.get('node_status')}")
+                    _trace_step(
+                        trace,
+                        "node_done",
+                        node=node_name,
+                        node_status=event.get("node_status"),
+                    )
 
                     yield _sse(event)
 
@@ -1328,6 +1456,10 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
 
                 _log(f"final event {len(frame)} bytes rss={_rss_mb()}MB")
 
+                trace["finished"] = True
+                trace["outcome"] = "SUCCESS"
+                _trace_step(trace, "final_event", bytes=len(frame))
+
                 yield frame
 
                 return
@@ -1339,6 +1471,10 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
             if event_type == "graph_error":
                 duration = time.monotonic() - started
                 _log(f"graph error after {duration:.1f}s: {data!r}")
+
+                trace["finished"] = True
+                trace["outcome"] = "ERROR"
+                _trace_step(trace, "graph_error", detail=str(data)[:500])
 
                 yield _sse(
                     {
