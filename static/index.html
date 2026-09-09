@@ -1285,7 +1285,32 @@
           : "";
 
         showFault("CONNECTION DROPPED",
-          detail + mem + " The server was cut off mid-run — check the service logs for a crash, restart or out-of-memory kill. / सर्वर बीच में बंद हो गया — सर्वर लॉग जांचें।");
+          detail + mem + " The server was cut off mid-run. / सर्वर बीच में बंद हो गया।");
+
+        // The server writes each step of a run to disk, and that file
+        // outlives the worker process. Ask it what it was doing when
+        // it stopped — this is the one record a killed process leaves.
+        try {
+          const res = await fetch("/api/last-run", { cache: "no-store" });
+          if (res.ok) {
+            const trace = await res.json();
+            const stop = trace && trace.stopped_after;
+            if (trace && trace.available && !trace.finished && stop) {
+              const where = stop.node
+                ? `${stop.what} (${stop.node})`
+                : stop.running_after
+                ? `${stop.what}, running after ${stop.running_after}`
+                : stop.what;
+              faultBody.textContent +=
+                ` Server's own record: last step was "${where}" at ${stop.at_seconds}s` +
+                (stop.memory_rss_mb != null ? `, memory ${stop.memory_rss_mb} MB` : "") +
+                ". The process stopped there.";
+            } else if (trace && trace.available && trace.finished) {
+              faultBody.textContent +=
+                ` Server's own record says the run finished (${trace.outcome}) — so the result was lost in transit, not on the server.`;
+            }
+          }
+        } catch (_) { /* diagnostics are best-effort */ }
       }
     } catch (err) {
       if (err && err.name === "AbortError") return;
