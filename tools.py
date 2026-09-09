@@ -124,15 +124,71 @@ def check_coastal_proximity(
     ring_samples: int = 16,
 ) -> dict:
     """
-    ... (docstring unchanged) ...
+    Decide whether a lat/lon is coastal enough for a marine assessment.
+
+    The Planner calls this instead of asking the LLM, which guesses.
+
+    Returns:
+        is_over_water        True if the point itself is at sea, None
+                             when the active mode cannot tell
+        is_coastal           the only field the pipeline reads
+        approx_distance_km   distance to the nearest coast, if known
+        checked_radii_km     radii probed (land-mask mode only)
+        mode                 which backend answered
+
+    MODES (COASTAL_CHECK_MODE):
+
+        coastline  default. Distance to a coastline waypoint list.
+                   ~100 KB, no numpy, no data files.
+
+        landmask   the original global_land_mask raster. Exact and
+                   global, but it decompresses a boolean world map
+                   into RAM — measured at +341 MB on first call, which
+                   is an out-of-memory kill on a 512 MB instance. Use
+                   only where memory is not scarce.
+
+        off        skip the check entirely. planner_node treats a
+                   missing result as "not my call" and lets the LLM
+                   prompt gate coastal-ness on its own.
     """
-    from global_land_mask import globe   # lazy import — loads the raster
-                                          # only when this tool actually runs,
-                                          # not at process startup, to cut
-                                          # peak memory during Render's boot.
+    mode = os.getenv("COASTAL_CHECK_MODE", "coastline").strip().lower()
 
     lat = float(latitude)
     lon = float(longitude)
+
+    # ------------------------------------------------------------
+    # off — no deterministic gate at all
+    # ------------------------------------------------------------
+    if mode in ("off", "none", "disabled"):
+        return {
+            "is_over_water": None,
+            "is_coastal": True,
+            "approx_distance_km": None,
+            "checked_radii_km": [],
+            "mode": "off",
+        }
+
+    # ------------------------------------------------------------
+    # coastline — the default, cheap path
+    # ------------------------------------------------------------
+    if mode == "coastline":
+        from coastline import coastal_proximity
+
+        result = coastal_proximity(lat, lon, max_radius_km=max_radius_km)
+
+        return {
+            "is_over_water": result["is_over_water"],
+            "is_coastal": result["is_coastal"],
+            "approx_distance_km": result["distance_km"],
+            "checked_radii_km": [],
+            "mode": "coastline",
+            "coverage": result["coverage"],
+        }
+
+    # ------------------------------------------------------------
+    # landmask — the original implementation, opt-in
+    # ------------------------------------------------------------
+    from global_land_mask import globe   # loads a large raster into RAM
 
     is_over_water = bool(globe.is_land(lat, lon)) is False
 
@@ -142,6 +198,7 @@ def check_coastal_proximity(
             "is_coastal": True,
             "approx_distance_km": 0.0,
             "checked_radii_km": [],
+            "mode": "landmask",
         }
 
     # Point is on land -> check rings of increasing radius for a coastline.
@@ -164,6 +221,7 @@ def check_coastal_proximity(
                 "is_coastal": True,
                 "approx_distance_km": radius,
                 "checked_radii_km": radii_to_check,
+                "mode": "landmask",
             }
 
     return {
@@ -171,6 +229,7 @@ def check_coastal_proximity(
         "is_coastal": False,
         "approx_distance_km": None,
         "checked_radii_km": radii_to_check,
+        "mode": "landmask",
     }
 
 
