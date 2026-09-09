@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ORCAWA — Marine Conditions Intelligence</title>
 <meta name="description" content="ORCAWA reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment, in English and Hindi." />
+<meta name="theme-color" content="#061622" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
@@ -30,18 +31,23 @@
     --unknown:#6c8896;
     --radius-sm:6px;
     --radius-md:10px;
+    --radius-lg:14px;
     --serif:'Fraunces', Georgia, serif;
     --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
     --hindi:'Noto Sans Devanagari', 'IBM Plex Sans', sans-serif;
   }
 
+  /* ---------------- Bilingual text ---------------- */
   .hi{
     display:block;
     font-family:var(--hindi);
     color:var(--text-faint);
     font-weight:400;
   }
+  .hi-inline{display:inline; margin-top:0;}
+  body.lang-en .hi{display:none !important;}
+
   label .hi, .panel-eyebrow .hi, .plabel .hi, .console-label .hi{
     font-size:0.92em;
     margin-top:2px;
@@ -60,9 +66,9 @@
     color:var(--text-faint);
     font-size:0.95em;
   }
-  .run-btn .hi{color:rgba(6,20,31,0.65); font-size:0.82em; margin-top:1px;}
+  .run-btn .hi{color:rgba(6,20,31,0.68); font-size:0.82em; margin-top:1px;}
   .brand-tag .hi{margin-top:1px; font-size:1em;}
-  .rec-banner #recText .hi, #summaryText.hi{margin-top:6px;}
+  .rec-banner #recText .hi, #summaryText .hi{margin-top:6px;}
   .fault-title .hi{margin-top:2px; color:#f4b3ae; font-size:0.9em;}
   .placeholder .hi{color:var(--text-faint); font-size:0.95em; margin-top:4px;}
   nav.top-links span{display:flex; flex-direction:column; gap:1px; text-align:left;}
@@ -80,6 +86,7 @@
       radial-gradient(ellipse 900px 500px at 50% -8%, rgba(18,60,82,0.5), transparent 60%),
       radial-gradient(ellipse 700px 600px at 100% 8%, rgba(201,161,90,0.07), transparent 55%),
       linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%);
+    background-attachment:fixed;
     min-height:100vh;
     line-height:1.5;
     -webkit-font-smoothing:antialiased;
@@ -87,30 +94,51 @@
 
   a{color:inherit;}
   ::selection{background:var(--brass-soft); color:var(--text);}
-  button:focus-visible, input:focus-visible, textarea:focus-visible{
+  button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible{
     outline:2px solid var(--brass);
     outline-offset:2px;
   }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+  }
 
   .wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
+  @media (max-width:560px){ .wrap{padding:0 16px;} }
 
   /* ---------------- Header ---------------- */
   header.top{padding:26px 0 0;}
   .top-row{
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    flex-wrap:wrap;
     padding-bottom:22px;
     border-bottom:1px solid var(--line-soft);
   }
-  .brand{display:flex; align-items:center; gap:12px;}
+  .brand{display:flex; align-items:center; gap:12px; min-width:0;}
   .brand-mark{width:32px; height:32px; flex:none;}
   .brand-word{font-family:var(--serif); font-size:19px; font-weight:600; letter-spacing:0.01em;}
   .brand-tag{font-size:11px; color:var(--text-faint); font-family:var(--mono); margin-top:1px; letter-spacing:0.03em;}
+  .top-right{display:flex; align-items:center; gap:20px;}
   nav.top-links{display:flex; gap:24px; font-size:13.5px; color:var(--text-muted);}
-  @media (max-width:640px){ nav.top-links{display:none;} }
+  @media (max-width:860px){ nav.top-links{display:none;} }
 
-  /* ---------------- Hero (centered) ---------------- */
+  .lang-toggle{
+    display:flex; align-items:center; gap:0;
+    border:1px solid var(--line); border-radius:999px; overflow:hidden;
+    flex:none;
+  }
+  .lang-toggle button{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.04em;
+    background:transparent; border:none; color:var(--text-faint);
+    padding:6px 12px; cursor:pointer; transition:background .15s ease, color .15s ease;
+  }
+  .lang-toggle button[aria-pressed="true"]{background:var(--brass-soft); color:var(--brass);}
+  .lang-toggle button:not([aria-pressed="true"]):hover{color:var(--text);}
+  .lang-toggle button + button{border-left:1px solid var(--line);}
+
+  /* ---------------- Hero ---------------- */
   .hero{
-    padding:56px 0 40px;
+    padding:52px 0 36px;
     max-width:680px;
     margin:0 auto;
     text-align:center;
@@ -127,7 +155,7 @@
   }
   .hero p{font-size:16px; color:var(--text-muted); margin:0 auto; max-width:52ch;}
 
-  /* ---------------- Two-pane layout (centered as a block) ---------------- */
+  /* ---------------- Two-pane layout ---------------- */
   .console-shell{
     display:grid;
     grid-template-columns: 400px 1fr;
@@ -138,7 +166,7 @@
     margin:0 auto;
   }
   @media (max-width:920px){
-    .console-shell{grid-template-columns:1fr; max-width:520px;}
+    .console-shell{grid-template-columns:1fr; max-width:560px;}
   }
 
   .console{
@@ -162,7 +190,7 @@
     border-bottom:1px solid var(--line-soft);
   }
 
-  .coord-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;}
+  .coord-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;}
   .field{display:flex; flex-direction:column; gap:6px;}
   .field label{font-size:12.5px; color:var(--text-muted);}
   .field input, .field textarea{
@@ -175,6 +203,8 @@
     padding:10px 12px;
     width:100%;
   }
+  .field input:hover, .field textarea:hover{border-color:rgba(234,242,246,0.2);}
+  .field input[aria-invalid="true"]{border-color:var(--severe);}
   .field textarea{
     font-family:var(--sans);
     font-size:14.5px;
@@ -182,6 +212,15 @@
     min-height:64px;
   }
   .field input::placeholder, .field textarea::placeholder{color:var(--text-faint);}
+
+  .geo-row{display:flex; justify-content:flex-end; margin-bottom:12px;}
+  .link-btn{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-family:var(--mono); font-size:11.5px; color:var(--text-faint);
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .link-btn:hover{color:var(--brass);}
+  .link-btn svg{width:12px; height:12px;}
 
   .presets{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
   .chip{
@@ -193,10 +232,10 @@
     background:transparent;
     color:var(--text-muted);
     cursor:pointer;
-    transition:border-color .15s ease, color .15s ease;
+    transition:border-color .15s ease, color .15s ease, background .15s ease;
   }
   .chip:hover{border-color:var(--brass); color:var(--text);}
-  .chip.active{border-color:var(--brass); color:var(--brass); background:var(--brass-soft);}
+  .chip[aria-pressed="true"]{border-color:var(--brass); color:var(--brass); background:var(--brass-soft);}
 
   .run-btn{
     width:100%;
@@ -209,24 +248,38 @@
     border-radius:var(--radius-sm);
     padding:13px 20px;
     cursor:pointer;
-    transition:transform .15s ease, box-shadow .15s ease;
+    transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
     box-shadow:0 4px 14px rgba(201,161,90,0.16);
   }
-  .run-btn:hover{transform:translateY(-1px); box-shadow:0 6px 18px rgba(201,161,90,0.26);}
+  .run-btn:hover:not(:disabled){transform:translateY(-1px); box-shadow:0 6px 18px rgba(201,161,90,0.26);}
   .run-btn:disabled{opacity:0.55; cursor:progress; transform:none;}
   .console-hint{font-size:12px; color:var(--text-faint); margin-top:10px; text-align:center;}
 
-  /* ---------------- Parallel pipeline flow diagram ---------------- */
-  .flow-section{display:none; padding:6px 0 46px;}
+  .progress-block{display:none; margin-top:16px;}
+  .progress-block.show{display:block;}
+  .progress-head{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    font-family:var(--mono); font-size:11.5px; color:var(--brass); margin-bottom:8px;
+  }
+  .progress-head .elapsed{color:var(--text-faint);}
+  .progress-track{height:3px; border-radius:2px; background:rgba(234,242,246,0.09); overflow:hidden;}
+  .progress-fill{
+    height:100%; width:0%; border-radius:2px;
+    background:linear-gradient(90deg, #d8b579, var(--brass));
+    transition:width .4s ease;
+  }
+  .progress-note{font-family:var(--mono); font-size:11px; color:var(--text-faint); margin-top:8px;}
+
+  /* ---------------- Pipeline flow diagram ---------------- */
+  .flow-section{display:none; padding:6px 0 44px;}
   .flow-section.show{display:block;}
   .flow-caption{
     font-family:var(--mono); font-size:11px; color:var(--brass);
-    letter-spacing:0.08em; text-align:center; margin-bottom:26px;
+    letter-spacing:0.08em; text-align:center; margin-bottom:24px;
     text-transform:uppercase;
   }
 
-  .flow-diagram{display:flex; flex-direction:column; align-items:center;}
-
+  .flow-diagram{display:flex; flex-direction:column; align-items:center; min-width:0;}
   .flow-stem{width:1px; height:22px; background:var(--line); flex:none;}
 
   .flow-node{
@@ -239,18 +292,24 @@
     flex:none;
     transition:border-color .35s ease, background .35s ease, opacity .35s ease;
   }
+  /* display:block matters — .flow-icon is a <span>, and width/height
+     are ignored on an inline box, which rendered the icons oversized. */
   .flow-node .flow-icon{
+    display:block;
     width:22px; height:22px; margin:0 auto 8px;
     color:var(--text-faint);
     transition:color .35s ease;
   }
   .flow-node .flow-icon svg{width:100%; height:100%; display:block;}
-  .flow-node .flow-label{font-family:var(--sans); font-weight:600; font-size:12.5px; color:var(--text-muted); line-height:1.3; transition:color .35s ease;}
+  .flow-node .flow-label{display:block; font-family:var(--sans); font-weight:600; font-size:12.5px; color:var(--text-muted); line-height:1.3; transition:color .35s ease;}
   .flow-node .flow-label .hi{font-weight:400; font-size:0.86em; margin-top:2px; color:var(--text-faint);}
   .flow-node .flow-status{
     font-family:var(--mono); font-size:9px; letter-spacing:0.07em;
     color:var(--text-faint); margin-top:6px; text-transform:uppercase;
+    display:block; min-height:12px;
   }
+  .flow-node .flow-status .hi{display:block; margin-top:2px; letter-spacing:0; text-transform:none; font-size:1.05em;}
+  body.lang-en .flow-node .flow-status .hi{display:none;}
 
   .flow-node.status-active{border-color:var(--brass); background:var(--brass-soft); box-shadow:0 0 0 3px var(--brass-soft);}
   .flow-node.status-active .flow-icon{color:var(--brass); animation:pulse 1.3s ease-in-out infinite;}
@@ -262,34 +321,43 @@
   .flow-node.status-done .flow-label{color:var(--text);}
   .flow-node.status-done .flow-status{color:var(--low);}
 
-  .flow-node.status-skipped{opacity:0.35;}
+  .flow-node.status-partial{border-color:rgba(201,161,90,0.45); background:rgba(201,161,90,0.06);}
+  .flow-node.status-partial .flow-icon{color:var(--moderate);}
+  .flow-node.status-partial .flow-label{color:var(--text);}
+  .flow-node.status-partial .flow-status{color:var(--moderate);}
+
+  .flow-node.status-failed{border-color:rgba(217,86,79,0.45); background:rgba(217,86,79,0.06);}
+  .flow-node.status-failed .flow-icon{color:var(--severe);}
+  .flow-node.status-failed .flow-label{color:var(--text);}
+  .flow-node.status-failed .flow-status{color:#f4b3ae;}
+
+  .flow-node.status-skipped{opacity:0.32;}
   .flow-node.status-pending{opacity:0.6;}
 
   .flow-planner{width:158px;}
   .flow-final{width:190px;}
 
-  .flow-row-outer{max-width:100%; overflow-x:auto; padding-bottom:2px;}
-  .flow-row-wrap{position:relative; width:732px; margin:0 auto;}
+  /* min-width:0 + align-self:stretch are load-bearing: .flow-diagram is
+     a column flexbox, and a flex item's default min-width:auto let the
+     wide agent row push the whole page into horizontal scroll on
+     narrow screens instead of scrolling inside this box. */
+  .flow-row-outer{
+    width:100%; max-width:100%; min-width:0; align-self:stretch;
+    overflow-x:auto; padding-bottom:4px;
+  }
+  .flow-row-wrap{position:relative; margin:0 auto; width:max-content; min-width:min-content;}
+  @media (max-width:920px){ .flow-row-wrap{margin:0;} }
   .flow-bus{position:absolute; top:0; left:48px; right:48px; height:1px; background:var(--line);}
-  .flow-columns{display:flex; gap:10px; padding-top:22px;}
+  /* stretch keeps every specialist card the same height even when one
+     label wraps to two lines */
+  .flow-columns{display:flex; gap:10px; padding-top:22px; align-items:stretch;}
   .flow-column{display:flex; flex-direction:column; align-items:center; width:96px;}
-  .flow-column .flow-node{width:96px;}
+  .flow-column .flow-node{width:96px; flex:1 1 auto;}
 
-  @media (max-width:920px){
-    .flow-row-wrap{margin:0;}
-  }
-
-  .loading-line{
-    display:none; align-items:center; gap:9px;
-    font-family:var(--mono); font-size:12px; color:var(--brass);
-    margin-top:14px;
-  }
-  .loading-line.show{display:flex;}
-  .loading-dot{width:6px; height:6px; border-radius:50%; background:var(--brass); animation:pulse 1.1s ease-in-out infinite;}
   @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
 
   /* ---------------- Results ---------------- */
-  .results-col{min-height:200px;}
+  .results-col{min-height:220px;}
 
   .placeholder{
     border:1px dashed var(--line);
@@ -314,8 +382,13 @@
 
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 20px;}
   .panel-eyebrow{font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-bottom:10px; letter-spacing:0.04em;}
-  .risk-value{font-family:var(--serif); font-size:32px; font-weight:600; display:flex; align-items:baseline; gap:10px;}
-  .risk-dot{width:10px; height:10px; border-radius:50%; margin-bottom:4px; flex:none;}
+  .risk-panel{position:relative; overflow:hidden;}
+  .risk-panel::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--risk-color, var(--unknown));
+  }
+  .risk-value{font-family:var(--serif); font-size:32px; font-weight:600; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .risk-dot{width:10px; height:10px; border-radius:50%; margin-bottom:4px; flex:none; background:var(--risk-color, var(--unknown));}
   .risk-value small{font-family:var(--sans); font-size:12.5px; color:var(--text-faint); font-weight:400;}
 
   .loc-value{font-family:var(--mono); font-size:15px; color:var(--text);}
@@ -332,6 +405,16 @@
   }
   .rec-banner .panel-eyebrow{color:#8fd0ab;}
 
+  .notice{
+    border-radius:var(--radius-md); padding:16px 19px; margin-bottom:14px;
+    border:1px solid rgba(201,161,90,0.35);
+    background:rgba(201,161,90,0.07);
+    color:#f0dcb6; font-size:14.5px; line-height:1.55;
+    display:none;
+  }
+  .notice.show{display:block;}
+  .notice .panel-eyebrow{color:var(--brass);}
+
   .two-col{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
   @media (max-width:560px){ .two-col{grid-template-columns:1fr;} }
 
@@ -340,11 +423,47 @@
   .list-panel li::before{content:""; position:absolute; left:0; top:6px; width:5px; height:5px; border-radius:50%; background:var(--brass);}
   .list-panel.advice li::before{background:var(--coral);}
 
-  details.raw{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 18px;}
-  details.raw summary{cursor:pointer; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); letter-spacing:0.02em;}
-  details.raw pre{margin:14px 0 4px; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); white-space:pre-wrap; word-break:break-word; max-height:320px; overflow:auto;}
+  .results-actions{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+  .ghost-btn{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:0.03em;
+    background:transparent; border:1px solid var(--line); color:var(--text-muted);
+    padding:8px 14px; border-radius:var(--radius-sm); cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .ghost-btn:hover{border-color:var(--brass); color:var(--text);}
 
-  /* ---------------- Fault panel (errors) ---------------- */
+  /* ---------------- Agent readout ---------------- */
+  .readout{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 18px;}
+  .readout > summary{cursor:pointer; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); letter-spacing:0.02em;}
+  .readout > summary::marker{color:var(--text-faint);}
+  .agent-list{display:flex; flex-direction:column; gap:8px; margin-top:14px;}
+  .agent-card{border:1px solid var(--line-soft); border-radius:var(--radius-sm); background:rgba(6,22,34,0.35);}
+  .agent-card > summary{
+    cursor:pointer; padding:10px 12px; display:flex; align-items:center; gap:10px;
+    font-family:var(--sans); font-size:13px; color:var(--text); list-style:none;
+  }
+  .agent-card > summary::-webkit-details-marker{display:none;}
+  .agent-card > summary::before{
+    content:"▸"; color:var(--text-faint); font-size:11px; transition:transform .15s ease;
+  }
+  .agent-card[open] > summary::before{content:"▾";}
+  .agent-name{flex:1; min-width:0;}
+  .pill{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase;
+    padding:3px 8px; border-radius:999px; border:1px solid currentColor; flex:none;
+  }
+  .pill.ok{color:var(--low);}
+  .pill.partial{color:var(--moderate);}
+  .pill.fail{color:#f4b3ae;}
+  .pill.muted{color:var(--text-faint);}
+  .agent-card pre{
+    margin:0; padding:0 12px 12px;
+    font-family:var(--mono); font-size:11px; color:var(--text-muted);
+    white-space:pre-wrap; word-break:break-word; max-height:280px; overflow:auto;
+  }
+  .readout .empty{font-family:var(--mono); font-size:11.5px; color:var(--text-faint); margin-top:12px;}
+
+  /* ---------------- Fault panel ---------------- */
   .fault-panel{
     border:1px solid rgba(217,86,79,0.4);
     background:rgba(217,86,79,0.07);
@@ -357,7 +476,6 @@
   .fault-dot{width:8px; height:8px; border-radius:50%; background:var(--severe); flex:none;}
   .fault-title{font-family:var(--mono); font-size:12px; color:#f4b3ae; letter-spacing:0.03em;}
   .fault-body{font-size:14px; color:#f4c9c6; line-height:1.55;}
-  .fault-body a{color:var(--brass); text-decoration:underline;}
   .fault-retry{
     margin-top:12px;
     font-family:var(--mono); font-size:12px;
@@ -367,20 +485,19 @@
   .fault-retry:hover{border-color:#f4c9c6;}
 
   footer{
-    margin:20px 0 40px; padding-top:20px; border-top:1px solid var(--line-soft);
+    margin:20px auto 40px; padding-top:20px; border-top:1px solid var(--line-soft);
     font-size:12px; color:var(--text-faint);
     display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
     max-width:980px;
-    margin-left:auto;
-    margin-right:auto;
   }
 
   @media (prefers-reduced-motion: reduce){
     *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+    html{scroll-behavior:auto;}
   }
 </style>
 </head>
-<body>
+<body class="lang-both">
 
 <div class="wrap">
 
@@ -398,129 +515,159 @@
           <div class="brand-tag">Marine conditions intelligence<span class="hi">समुद्री स्थिति सूचना</span></div>
         </div>
       </div>
-      <nav class="top-links">
-        <span>Weather<span class="hi">मौसम</span></span>
-        <span>Sea state<span class="hi">समुद्री स्थिति</span></span>
-        <span>Tides<span class="hi">ज्वार-भाटा</span></span>
-        <span>Hazards<span class="hi">खतरे</span></span>
-      </nav>
+
+      <div class="top-right">
+        <nav class="top-links" aria-label="Data sources">
+          <span>Weather<span class="hi">मौसम</span></span>
+          <span>Sea state<span class="hi">समुद्री स्थिति</span></span>
+          <span>Tides<span class="hi">ज्वार-भाटा</span></span>
+          <span>Hazards<span class="hi">खतरे</span></span>
+        </nav>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" id="langBoth" aria-pressed="true">EN + हिं</button>
+          <button type="button" id="langEn" aria-pressed="false">EN</button>
+        </div>
+      </div>
     </div>
   </header>
 
-  <section class="hero">
-    <h1>Know the water before you go.<span class="hi">जाने से पहले समुद्र को जानें</span></h1>
-    <p>Ask a plain question about a coastal spot. ORCAWA checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। ORCAWA हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
-  </section>
+  <main>
 
-  <section class="flow-section" id="flowSection">
-    <div class="flow-caption">Parallel pipeline execution<span class="hi" style="display:inline; margin-top:0; text-transform:none;"> / समानांतर प्रक्रिया</span></div>
-    <div class="flow-diagram" id="flowDiagram"></div>
-  </section>
-
-  <div class="console-shell">
-
-    <section class="console" id="console">
-      <div class="console-label">Target location &amp; question<span class="hi">स्थान और प्रश्न</span></div>
-
-      <div class="coord-row">
-        <div class="field">
-          <label for="lat">Latitude<span class="hi">अक्षांश</span></label>
-          <input id="lat" type="number" step="0.0001" value="19.0760" placeholder="19.0760" />
-        </div>
-        <div class="field">
-          <label for="lon">Longitude<span class="hi">देशांतर</span></label>
-          <input id="lon" type="number" step="0.0001" value="72.8777" placeholder="72.8777" />
-        </div>
-      </div>
-
-      <div class="presets" id="presets">
-        <button class="chip" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
-        <button class="chip" data-lat="13.0827" data-lon="80.2707">Chennai</button>
-        <button class="chip" data-lat="9.9312" data-lon="76.2673">Kochi</button>
-        <button class="chip" data-lat="17.6868" data-lon="83.2185">Visakhapatnam</button>
-        <button class="chip" data-lat="15.4909" data-lon="73.8278">Goa</button>
-        <button class="chip" data-lat="8.0883" data-lon="77.5385">Kanyakumari</button>
-      </div>
-
-      <div class="field" style="margin-bottom:18px;">
-        <label for="question">Your question<span class="hi">आपका प्रश्न</span></label>
-        <textarea id="question" placeholder="e.g. Is it safe to take the boat out tomorrow morning? / जैसे: क्या कल सुबह नाव ले जाना सुरक्षित है?">Is it safe to venture into the sea tomorrow morning?</textarea>
-      </div>
-
-      <button class="run-btn" id="runBtn">Run assessment<span class="hi">आकलन चलाएँ</span></button>
-      <div class="console-hint">Typically 15&ndash;40s &mdash; ORCAWA calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
-
-      <div class="loading-line" id="loadingLine">
-        <span class="loading-dot"></span>
-        <span id="loadingText">Contacting marine data sources&hellip;</span>
-      </div>
+    <section class="hero">
+      <h1>Know the water before you go.<span class="hi">जाने से पहले समुद्र को जानें</span></h1>
+      <p>Ask a plain question about a coastal spot. ORCAWA checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। ORCAWA हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
     </section>
 
-    <div class="results-col">
+    <section class="flow-section" id="flowSection" aria-label="Pipeline progress">
+      <div class="flow-caption">Parallel pipeline execution<span class="hi hi-inline" style="text-transform:none;"> / समानांतर प्रक्रिया</span></div>
+      <div class="flow-diagram" id="flowDiagram"></div>
+    </section>
 
-      <div class="placeholder" id="placeholder">
-        <strong>No assessment yet<span class="hi" style="font-size:0.55em; margin-top:6px;">अभी तक कोई आकलन नहीं</span></strong>
-        Pick a location and ask a question to run a live marine check.
-        <span class="hi">कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।</span>
-      </div>
+    <div class="console-shell">
 
-      <div class="fault-panel" id="faultPanel">
-        <div class="fault-head">
-          <span class="fault-dot"></span>
-          <span class="fault-title" id="faultTitle">NO SIGNAL</span>
+      <section class="console" id="console" aria-label="Assessment input">
+        <div class="console-label">Target location &amp; question<span class="hi">स्थान और प्रश्न</span></div>
+
+        <div class="coord-row">
+          <div class="field">
+            <label for="lat">Latitude<span class="hi">अक्षांश</span></label>
+            <input id="lat" type="number" step="0.0001" min="-90" max="90" value="19.0760" placeholder="19.0760" inputmode="decimal" />
+          </div>
+          <div class="field">
+            <label for="lon">Longitude<span class="hi">देशांतर</span></label>
+            <input id="lon" type="number" step="0.0001" min="-180" max="180" value="72.8777" placeholder="72.8777" inputmode="decimal" />
+          </div>
         </div>
-        <div class="fault-body" id="faultBody"></div>
-        <button class="fault-retry" id="faultRetry">Try again<span class="hi" style="display:inline; margin-top:0;"> / फिर कोशिश करें</span></button>
-      </div>
 
-      <section class="results" id="results">
+        <div class="geo-row">
+          <button type="button" class="link-btn" id="geoBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+            Use my location
+          </button>
+        </div>
 
-        <div class="risk-row">
-          <div class="panel">
-            <div class="panel-eyebrow">Overall risk<span class="hi">समग्र जोखिम</span></div>
-            <div class="risk-value">
-              <span class="risk-dot" id="riskDot"></span>
-              <span id="riskText">&mdash;</span>
-              <small id="riskActivity"></small>
+        <div class="presets" id="presets" role="group" aria-label="Preset locations">
+          <button type="button" class="chip" aria-pressed="false" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
+          <button type="button" class="chip" aria-pressed="false" data-lat="13.0827" data-lon="80.2707">Chennai</button>
+          <button type="button" class="chip" aria-pressed="false" data-lat="9.9312" data-lon="76.2673">Kochi</button>
+          <button type="button" class="chip" aria-pressed="false" data-lat="17.6868" data-lon="83.2185">Visakhapatnam</button>
+          <button type="button" class="chip" aria-pressed="false" data-lat="15.4909" data-lon="73.8278">Goa</button>
+          <button type="button" class="chip" aria-pressed="false" data-lat="8.0883" data-lon="77.5385">Kanyakumari</button>
+        </div>
+
+        <div class="field" style="margin-bottom:18px;">
+          <label for="question">Your question<span class="hi">आपका प्रश्न</span></label>
+          <textarea id="question" maxlength="600" placeholder="e.g. Is it safe to take the boat out tomorrow morning? / जैसे: क्या कल सुबह नाव ले जाना सुरक्षित है?">Is it safe to venture into the sea tomorrow morning?</textarea>
+        </div>
+
+        <button class="run-btn" id="runBtn" type="button"></button>
+        <div class="console-hint">Typically 15&ndash;40s &mdash; ORCAWA calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
+
+        <div class="progress-block" id="progressBlock">
+          <div class="progress-head">
+            <span id="progressLabel">Starting&hellip;</span>
+            <span class="elapsed" id="elapsedLabel">0.0s</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="progress-note" id="progressNote"></div>
+        </div>
+      </section>
+
+      <div class="results-col">
+
+        <div class="placeholder" id="placeholder">
+          <strong id="placeholderTitle">No assessment yet<span class="hi" style="font-size:0.55em; margin-top:6px;">अभी तक कोई आकलन नहीं</span></strong>
+          <span id="placeholderBody">Pick a location and ask a question to run a live marine check.<span class="hi">कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।</span></span>
+        </div>
+
+        <div class="fault-panel" id="faultPanel" role="alert">
+          <div class="fault-head">
+            <span class="fault-dot"></span>
+            <span class="fault-title" id="faultTitle">NO SIGNAL</span>
+          </div>
+          <div class="fault-body" id="faultBody"></div>
+          <button class="fault-retry" id="faultRetry" type="button">Try again<span class="hi hi-inline"> / फिर कोशिश करें</span></button>
+        </div>
+
+        <section class="results" id="results" aria-live="polite" aria-atomic="false">
+
+          <div class="notice" id="rejectNotice">
+            <div class="panel-eyebrow">Out of scope<span class="hi">दायरे से बाहर</span></div>
+            <div id="rejectText"></div>
+          </div>
+
+          <div class="risk-row">
+            <div class="panel risk-panel" id="riskPanel">
+              <div class="panel-eyebrow">Overall risk<span class="hi">समग्र जोखिम</span></div>
+              <div class="risk-value">
+                <span class="risk-dot" id="riskDot"></span>
+                <span id="riskText">&mdash;</span>
+                <small id="riskActivity"></small>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-eyebrow">Location &amp; time<span class="hi">स्थान और समय</span></div>
+              <div class="loc-value" id="locValue">&mdash;</div>
+              <div class="loc-sub" id="locSub">&mdash;</div>
             </div>
           </div>
-          <div class="panel">
-            <div class="panel-eyebrow">Location &amp; time<span class="hi">स्थान और समय</span></div>
-            <div class="loc-value" id="locValue">&mdash;</div>
-            <div class="loc-sub" id="locSub">&mdash;</div>
+
+          <div class="panel assessment-panel">
+            <div class="panel-eyebrow">Assessment<span class="hi">आकलन</span></div>
+            <p id="summaryText">&mdash;</p>
           </div>
-        </div>
 
-        <div class="panel assessment-panel">
-          <div class="panel-eyebrow">Assessment<span class="hi">आकलन</span></div>
-          <p id="summaryText">&mdash;</p>
-        </div>
-
-        <div class="rec-banner" id="recBanner">
-          <div class="panel-eyebrow">Recommendation<span class="hi">सिफारिश</span></div>
-          <div id="recText">&mdash;</div>
-        </div>
-
-        <div class="two-col">
-          <div class="panel list-panel" id="findingsPanel">
-            <div class="panel-eyebrow">Key findings<span class="hi">मुख्य निष्कर्ष</span></div>
-            <ul id="findingsList"></ul>
+          <div class="rec-banner" id="recBanner">
+            <div class="panel-eyebrow">Recommendation<span class="hi">सिफारिश</span></div>
+            <div id="recText">&mdash;</div>
           </div>
-          <div class="panel list-panel advice" id="advicePanel">
-            <div class="panel-eyebrow">Safety advisory<span class="hi">सुरक्षा सलाह</span></div>
-            <ul id="adviceList"></ul>
+
+          <div class="two-col">
+            <div class="panel list-panel" id="findingsPanel">
+              <div class="panel-eyebrow">Key findings<span class="hi">मुख्य निष्कर्ष</span></div>
+              <ul id="findingsList"></ul>
+            </div>
+            <div class="panel list-panel advice" id="advicePanel">
+              <div class="panel-eyebrow">Safety advisory<span class="hi">सुरक्षा सलाह</span></div>
+              <ul id="adviceList"></ul>
+            </div>
           </div>
-        </div>
 
-        <details class="raw">
-          <summary>View full agent data (technical readout) <span class="hi" style="display:inline; margin-top:0;">/ पूरा तकनीकी डेटा देखें</span></summary>
-          <pre id="rawData"></pre>
-        </details>
+          <div class="results-actions">
+            <button class="ghost-btn" id="copyBtn" type="button">Copy assessment</button>
+            <button class="ghost-btn" id="jsonBtn" type="button">Download JSON</button>
+          </div>
 
-      </section>
+          <details class="readout" id="readout">
+            <summary>View full agent data (technical readout)<span class="hi hi-inline"> / पूरा तकनीकी डेटा देखें</span></summary>
+            <div class="agent-list" id="agentList"></div>
+          </details>
+
+        </section>
+      </div>
+
     </div>
-
-  </div>
+  </main>
 
   <footer>
     <span>ORCAWA draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.<span class="hi">ORCAWA खुले समुद्री पूर्वानुमान, ज्वार केंद्रों और तटीय रजिस्ट्री से जानकारी लेता है। रवाना होने से पहले हमेशा स्थानीय अधिकारियों से पुष्टि करें।</span></span>
@@ -530,7 +677,59 @@
 </div>
 
 <script>
-  document.getElementById('year').textContent = new Date().getFullYear();
+(function () {
+  "use strict";
+
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  // ==========================================================
+  // Small helpers
+  // ==========================================================
+
+  const $ = (id) => document.getElementById(id);
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  /** English text plus an optional Devanagari line, as HTML. */
+  function bi(en, hi, inline) {
+    const cls = inline ? "hi hi-inline" : "hi";
+    return esc(en) + (hi ? `<span class="${cls}">${esc(hi)}</span>` : "");
+  }
+
+  /** Same, but on one line: "English / हिन्दी". */
+  function biSlash(en, hi) {
+    return esc(en) + (hi ? `<span class="hi hi-inline"> / ${esc(hi)}</span>` : "");
+  }
+
+  // ==========================================================
+  // Language toggle (in-memory only — no browser storage)
+  // ==========================================================
+
+  const langBoth = $("langBoth");
+  const langEn = $("langEn");
+
+  function setLanguage(mode) {
+    const enOnly = mode === "en";
+    document.body.classList.toggle("lang-en", enOnly);
+    document.body.classList.toggle("lang-both", !enOnly);
+    langEn.setAttribute("aria-pressed", String(enOnly));
+    langBoth.setAttribute("aria-pressed", String(!enOnly));
+  }
+
+  langEn.addEventListener("click", () => setLanguage("en"));
+  langBoth.addEventListener("click", () => setLanguage("both"));
+
+  // ==========================================================
+  // Pipeline topology
+  //
+  // Fetched from GET /api/graph so the diagram always matches
+  // graph.py. The literals below are only a fallback for when that
+  // request fails (offline preview, cold start).
+  // ==========================================================
 
   const ICONS = {
     planner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="19" r="1.8"/><circle cx="19" cy="5" r="1.8"/><path d="M6.3 17.7C7 12 10 10.5 12 9s3-3.3 5.7-3.7" stroke-dasharray="2.4 3"/></svg>',
@@ -541,50 +740,96 @@
     cyclone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5a5 5 0 1 1-3.6 8.5"/><path d="M12 4.5a8 8 0 1 0 6 13.3"/></svg>',
     ecosystem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5c7.5 0 13-5.5 15-15-9.5 0-15 5.5-15 15Z"/><path d="M6.5 17.5c3-4 6.5-7.5 11-9.5"/></svg>',
     pfz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12c4-4.6 9.5-6.4 14.2-4.6-1 1.9-1 3.3 0 5.2-1 1.9-1 3.3 0 5.2-4.7 1.8-10.2 0-14.2-4.6Z"/><circle cx="7.2" cy="10.6" r="0.6" fill="currentColor" stroke="none"/></svg>',
-    assessment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg>',
+    recommendation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg>',
   };
 
-  const FLOW_PLANNER = { id: "planner", label: "Planner", hi: "योजना" };
-  const FLOW_AGENTS = [
-    { id: "gis", label: "Coastal check", hi: "तटीय जांच" },
-    { id: "weather", label: "Weather", hi: "मौसम" },
-    { id: "ocean", label: "Sea state", hi: "समुद्री स्थिति" },
-    { id: "tide", label: "Tide", hi: "ज्वार-भाटा" },
-    { id: "cyclone", label: "Cyclone", hi: "चक्रवात" },
-    { id: "ecosystem", label: "Ecosystem", hi: "पारिस्थितिकी" },
-    { id: "pfz", label: "Fishing zone", hi: "मछली क्षेत्र" },
-  ];
-  const FLOW_FINAL = { id: "assessment", label: "Final assessment", hi: "आकलन" };
+  const FALLBACK_TOPOLOGY = {
+    entry: "planner",
+    final: "recommendation",
+    specialists: ["gis", "weather", "ocean", "tide", "cyclone", "ecosystem", "pfz"],
+    nodes: [
+      { id: "planner", kind: "planner", label: "Planner", label_hi: "योजना" },
+      { id: "gis", kind: "specialist", label: "Coastal check", label_hi: "तटीय जांच" },
+      { id: "weather", kind: "specialist", label: "Weather", label_hi: "मौसम" },
+      { id: "ocean", kind: "specialist", label: "Sea state", label_hi: "समुद्री स्थिति" },
+      { id: "tide", kind: "specialist", label: "Tide", label_hi: "ज्वार-भाटा" },
+      { id: "cyclone", kind: "specialist", label: "Cyclone", label_hi: "चक्रवात" },
+      { id: "ecosystem", kind: "specialist", label: "Ecosystem", label_hi: "पारिस्थितिकी" },
+      { id: "pfz", kind: "specialist", label: "Fishing zone", label_hi: "मछली क्षेत्र" },
+      { id: "recommendation", kind: "final", label: "Final assessment", label_hi: "आकलन" },
+    ],
+  };
+
+  let topology = FALLBACK_TOPOLOGY;
+  let nodeById = {};
+
+  function indexTopology() {
+    nodeById = {};
+    (topology.nodes || []).forEach((n) => { nodeById[n.id] = n; });
+  }
+  indexTopology();
+
+  function specialistIds() {
+    return (topology.nodes || [])
+      .filter((n) => n.kind === "specialist")
+      .map((n) => n.id);
+  }
+
+  fetch("/api/graph", { headers: { Accept: "application/json" } })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && Array.isArray(data.nodes) && data.nodes.length) {
+        topology = data;
+        indexTopology();
+        rebuildFlow();
+      }
+    })
+    .catch(() => { /* keep the fallback */ });
+
+  // ==========================================================
+  // Flow diagram
+  // ==========================================================
 
   const STATUS_TEXT = {
-    pending: "Waiting",
-    active: "Running",
-    done: "Completed",
-    skipped: "Not required",
+    pending: ["Waiting", "प्रतीक्षा"],
+    active: ["Running", "चल रहा है"],
+    done: ["Completed", "पूर्ण"],
+    partial: ["Partial data", "आंशिक"],
+    failed: ["No data", "डेटा नहीं"],
+    skipped: ["Not required", "आवश्यक नहीं"],
   };
 
-  function flowNodeHTML(node) {
+  const flowDiagram = $("flowDiagram");
+  const flowSection = $("flowSection");
+
+  function nodeInner(node) {
     return `
-      <span class="flow-icon">${ICONS[node.id] || ""}</span>
-      <span class="flow-label">${node.label}<span class="hi">${node.hi}</span></span>
-      <span class="flow-status" data-status-for="${node.id}">Waiting</span>
+      <span class="flow-icon" aria-hidden="true">${ICONS[node.id] || ICONS.planner}</span>
+      <span class="flow-label">${bi(node.label, node.label_hi)}</span>
+      <span class="flow-status" data-status-for="${esc(node.id)}">Waiting</span>
     `;
   }
 
-  function buildFlow() {
-    const root = document.getElementById("flowDiagram");
-    if (!root || root.dataset.built) return;
-    root.dataset.built = "1";
+  function makeNode(node, extraClass) {
+    const el = document.createElement("div");
+    el.className = `flow-node status-pending${extraClass ? " " + extraClass : ""}`;
+    el.dataset.node = node.id;
+    el.innerHTML = nodeInner(node);
+    return el;
+  }
 
-    const planner = document.createElement("div");
-    planner.className = "flow-node flow-planner status-pending";
-    planner.dataset.node = FLOW_PLANNER.id;
-    planner.innerHTML = flowNodeHTML(FLOW_PLANNER);
-    root.appendChild(planner);
+  function makeStem() {
+    const el = document.createElement("div");
+    el.className = "flow-stem";
+    return el;
+  }
 
-    const stem1 = document.createElement("div");
-    stem1.className = "flow-stem";
-    root.appendChild(stem1);
+  function rebuildFlow() {
+    flowDiagram.innerHTML = "";
+
+    const planner = nodeById[topology.entry] || FALLBACK_TOPOLOGY.nodes[0];
+    flowDiagram.appendChild(makeNode(planner, "flow-planner"));
+    flowDiagram.appendChild(makeStem());
 
     const rowOuter = document.createElement("div");
     rowOuter.className = "flow-row-outer";
@@ -595,88 +840,202 @@
     const columns = document.createElement("div");
     columns.className = "flow-columns";
 
-    FLOW_AGENTS.forEach((agent) => {
+    specialistIds().forEach((id) => {
       const col = document.createElement("div");
       col.className = "flow-column";
-      const stem = document.createElement("div");
-      stem.className = "flow-stem";
-      const node = document.createElement("div");
-      node.className = "flow-node status-pending";
-      node.dataset.node = agent.id;
-      node.innerHTML = flowNodeHTML(agent);
-      col.appendChild(stem);
-      col.appendChild(node);
+      col.appendChild(makeStem());
+      col.appendChild(makeNode(nodeById[id]));
       columns.appendChild(col);
     });
 
     rowWrap.appendChild(bus);
     rowWrap.appendChild(columns);
     rowOuter.appendChild(rowWrap);
-    root.appendChild(rowOuter);
+    flowDiagram.appendChild(rowOuter);
 
-    const stem2 = document.createElement("div");
-    stem2.className = "flow-stem";
-    root.appendChild(stem2);
+    flowDiagram.appendChild(makeStem());
 
-    const final = document.createElement("div");
-    final.className = "flow-node flow-final status-pending";
-    final.dataset.node = FLOW_FINAL.id;
-    final.innerHTML = flowNodeHTML(FLOW_FINAL);
-    root.appendChild(final);
+    const finalNode = nodeById[topology.final] || { id: "recommendation", label: "Final assessment", label_hi: "आकलन" };
+    flowDiagram.appendChild(makeNode(finalNode, "flow-final"));
   }
 
-  function setFlowStatus(statusMap) {
-    Object.entries(statusMap).forEach(([id, status]) => {
-      const node = document.querySelector(`.flow-node[data-node="${id}"]`);
-      if (!node) return;
-      node.classList.remove("status-pending", "status-active", "status-done", "status-skipped");
-      node.classList.add(`status-${status}`);
-      const statusEl = node.querySelector(`[data-status-for="${id}"]`);
-      if (statusEl) statusEl.textContent = STATUS_TEXT[status] || status;
+  rebuildFlow();
+
+  function setFlowStatus(map) {
+    Object.keys(map).forEach((id) => {
+      const status = map[id];
+      const el = flowDiagram.querySelector(`.flow-node[data-node="${CSS.escape(id)}"]`);
+      if (!el) return;
+      el.className = el.className.replace(/status-\w+/g, "").trim();
+      el.classList.add(`status-${status}`);
+      const label = el.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+      const text = STATUS_TEXT[status] || [status, ""];
+      if (label) label.innerHTML = bi(text[0], text[1]);
     });
   }
 
+  function resetFlow(status) {
+    const map = {};
+    (topology.nodes || []).forEach((n) => { map[n.id] = status; });
+    setFlowStatus(map);
+  }
+
+  // ==========================================================
+  // Elements
+  // ==========================================================
+
+  const latEl = $("lat");
+  const lonEl = $("lon");
+  const questionEl = $("question");
+  const runBtn = $("runBtn");
+  const presets = $("presets");
+  const geoBtn = $("geoBtn");
+  const placeholder = $("placeholder");
+  const results = $("results");
+  const faultPanel = $("faultPanel");
+  const faultTitle = $("faultTitle");
+  const faultBody = $("faultBody");
+  const faultRetry = $("faultRetry");
+  const progressBlock = $("progressBlock");
+  const progressLabel = $("progressLabel");
+  const progressFill = $("progressFill");
+  const progressNote = $("progressNote");
+  const elapsedLabel = $("elapsedLabel");
+
   const RISK_COLORS = {
-    LOW: "var(--low)", MODERATE: "var(--moderate)", HIGH: "var(--high)",
-    SEVERE: "var(--severe)", UNKNOWN: "var(--unknown)",
+    LOW: "var(--low)",
+    MODERATE: "var(--moderate)",
+    HIGH: "var(--high)",
+    SEVERE: "var(--severe)",
+    UNKNOWN: "var(--unknown)",
   };
 
-  const latEl = document.getElementById('lat');
-  const lonEl = document.getElementById('lon');
-  const questionEl = document.getElementById('question');
-  const runBtn = document.getElementById('runBtn');
-  const presets = document.getElementById('presets');
-  const flowSection = document.getElementById('flowSection');
-  const loadingLine = document.getElementById('loadingLine');
-  const loadingText = document.getElementById('loadingText');
-  const faultPanel = document.getElementById('faultPanel');
-  const faultTitle = document.getElementById('faultTitle');
-  const faultBody = document.getElementById('faultBody');
-  const faultRetry = document.getElementById('faultRetry');
-  const placeholder = document.getElementById('placeholder');
-  const results = document.getElementById('results');
+  // The run button holds a nested Devanagari span, so its label is
+  // rebuilt rather than overwritten with textContent (which used to
+  // delete the Hindi line permanently on the first run).
+  function setRunButton(mode) {
+    if (mode === "running") {
+      runBtn.innerHTML = bi("Running…", "चल रहा है…");
+      runBtn.disabled = true;
+      runBtn.setAttribute("aria-busy", "true");
+    } else {
+      runBtn.innerHTML = bi("Run assessment", "आकलन चलाएँ");
+      runBtn.disabled = false;
+      runBtn.removeAttribute("aria-busy");
+    }
+  }
+  setRunButton("idle");
 
-  presets.addEventListener('click', (e) => {
-    const btn = e.target.closest('.chip');
+  // ==========================================================
+  // Panels
+  // ==========================================================
+
+  // The results column would otherwise sit empty for the 15-40s a run
+  // takes, so the placeholder becomes the "working" state instead of
+  // being hidden.
+  function showPlaceholder(mode) {
+    if (mode === "running") {
+      $("placeholderTitle").innerHTML = bi("Assessment in progress", "आकलन जारी है");
+      $("placeholderBody").innerHTML = bi(
+        "ORCAWA is calling live marine data sources. Progress is shown above.",
+        "ORCAWA लाइव समुद्री डेटा स्रोतों से जानकारी ले रहा है। प्रगति ऊपर दिख रही है।"
+      );
+    } else {
+      $("placeholderTitle").innerHTML = bi("No assessment yet", "अभी तक कोई आकलन नहीं");
+      $("placeholderBody").innerHTML = bi(
+        "Pick a location and ask a question to run a live marine check.",
+        "कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।"
+      );
+    }
+    placeholder.style.display = "";
+    faultPanel.classList.remove("show");
+    results.classList.remove("show");
+  }
+
+  function showFault(title, message) {
+    placeholder.style.display = "none";
+    results.classList.remove("show");
+    faultTitle.textContent = title;
+    faultBody.textContent = message;
+    faultPanel.classList.add("show");
+  }
+
+  // ==========================================================
+  // Input handling
+  // ==========================================================
+
+  function syncPresetChips() {
+    const lat = latEl.value.trim();
+    const lon = lonEl.value.trim();
+    Array.prototype.forEach.call(presets.children, (chip) => {
+      const match =
+        Math.abs(parseFloat(chip.dataset.lat) - parseFloat(lat)) < 1e-4 &&
+        Math.abs(parseFloat(chip.dataset.lon) - parseFloat(lon)) < 1e-4;
+      chip.setAttribute("aria-pressed", String(match));
+    });
+  }
+
+  presets.addEventListener("click", (e) => {
+    const btn = e.target.closest(".chip");
     if (!btn) return;
     latEl.value = btn.dataset.lat;
     lonEl.value = btn.dataset.lon;
-    [...presets.children].forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
+    syncPresetChips();
   });
 
-  function showPlaceholder() {
-    placeholder.style.display = '';
-    faultPanel.classList.remove('show');
-    results.classList.remove('show');
+  latEl.addEventListener("input", syncPresetChips);
+  lonEl.addEventListener("input", syncPresetChips);
+  syncPresetChips();
+
+  geoBtn.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      showFault("LOCATION UNAVAILABLE", "This browser will not share a location. Enter coordinates manually. / यह ब्राउज़र स्थान साझा नहीं करता। निर्देशांक स्वयं दर्ज करें।");
+      return;
+    }
+    geoBtn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        latEl.value = pos.coords.latitude.toFixed(4);
+        lonEl.value = pos.coords.longitude.toFixed(4);
+        syncPresetChips();
+        geoBtn.disabled = false;
+      },
+      () => {
+        geoBtn.disabled = false;
+        showFault("LOCATION DENIED", "Location permission was refused. Enter coordinates manually. / स्थान की अनुमति नहीं मिली। निर्देशांक स्वयं दर्ज करें।");
+      },
+      { timeout: 10000 }
+    );
+  });
+
+  // ==========================================================
+  // Run
+  // ==========================================================
+
+  let inFlight = null;      // AbortController for the current run
+  let elapsedTimer = null;
+  let lastResult = null;
+
+  function startElapsed() {
+    const t0 = Date.now();
+    elapsedLabel.textContent = "0.0s";
+    stopElapsed();
+    elapsedTimer = setInterval(() => {
+      elapsedLabel.textContent = ((Date.now() - t0) / 1000).toFixed(1) + "s";
+    }, 100);
   }
 
-  function showFault(status, message) {
-    placeholder.style.display = 'none';
-    results.classList.remove('show');
-    faultTitle.textContent = status;
-    faultBody.textContent = message;
-    faultPanel.classList.add('show');
+  function stopElapsed() {
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+  }
+
+  function setProgress(doneCount, totalCount, labelEn, labelHi) {
+    const pct = totalCount > 0 ? Math.min(100, (doneCount / totalCount) * 100) : 0;
+    progressFill.style.width = pct + "%";
+    progressLabel.innerHTML = biSlash(labelEn, labelHi);
   }
 
   async function runAssessment() {
@@ -684,194 +1043,354 @@
     const longitude = parseFloat(lonEl.value);
     const question = questionEl.value.trim();
 
-    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      showFault('BAD COORDINATES', 'Enter a valid latitude and longitude before running an assessment. / सही अक्षांश और देशांतर दर्ज करें।');
+    latEl.setAttribute("aria-invalid", "false");
+    lonEl.setAttribute("aria-invalid", "false");
+
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      latEl.setAttribute("aria-invalid", "true");
+      showFault("BAD COORDINATES", "Latitude must be a number between -90 and 90. / अक्षांश -90 से 90 के बीच होना चाहिए।");
+      return;
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      lonEl.setAttribute("aria-invalid", "true");
+      showFault("BAD COORDINATES", "Longitude must be a number between -180 and 180. / देशांतर -180 से 180 के बीच होना चाहिए।");
       return;
     }
     if (!question) {
-      showFault('NO QUESTION', 'Enter a question about the location before running an assessment. / स्थान के बारे में एक प्रश्न दर्ज करें।');
+      showFault("NO QUESTION", "Enter a question about the location before running an assessment. / स्थान के बारे में एक प्रश्न दर्ज करें।");
       return;
     }
 
-    faultPanel.classList.remove('show');
-    results.classList.remove('show');
-    placeholder.style.display = 'none';
-    runBtn.disabled = true;
-    runBtn.textContent = 'Running\u2026';
-    buildFlow();
-    flowSection.classList.add('show');
-    loadingLine.classList.add('show');
-    loadingText.innerHTML = 'Streaming live pipeline status\u2026 <span class="hi" style="display:inline; margin-top:0; font-size:0.85em;">/ लाइव प्रक्रिया की स्थिति दिखाई जा रही है\u2026</span>';
+    // A second click replaces the first run rather than racing it.
+    if (inFlight) inFlight.abort();
+    const controller = new AbortController();
+    inFlight = controller;
 
-    // Only the planner knows which agents are required, and it only
-    // knows that once its own node has run \u2014 so every agent starts
-    // "pending" and gets set to active/skipped the moment the planner's
-    // event arrives, never faked as running before that.
-    setFlowStatus({
-      planner: 'active', gis: 'pending', weather: 'pending', ocean: 'pending',
-      tide: 'pending', cyclone: 'pending', ecosystem: 'pending', pfz: 'pending',
-      assessment: 'pending',
-    });
+    showPlaceholder("running");
+    setRunButton("running");
+    flowSection.classList.add("show");
+    progressBlock.classList.add("show");
+    progressNote.textContent = "";
+    startElapsed();
 
-    let requiredAgentIds = new Set();
-    const doneAgentIds = new Set();
+    // Only the planner knows which specialists are required, and only
+    // once it has run — so everything starts pending and the server's
+    // planned_nodes list (computed by graph.route_after_planner) is
+    // what marks nodes active or skipped.
+    resetFlow("pending");
+    setFlowStatus({ [topology.entry]: "active" });
+    setProgress(0, 1, "Planning…", "योजना बन रही है…");
+
+    let plannedSpecialists = [];
+    const finishedSpecialists = new Set();
     let finalData = null;
+    let hardError = null;
 
-    function handlePlannerEvent(plan) {
-      const required = new Set(
-        (plan?.required_agents || []).map(a => String(a).toLowerCase())
-      );
-      required.add('gis'); // GIS is the application baseline and always runs
-      requiredAgentIds = new Set(FLOW_AGENTS.map(a => a.id).filter(id => required.has(id)));
-      const map = { planner: 'done' };
-      FLOW_AGENTS.forEach(a => { map[a.id] = required.has(a.id) ? 'active' : 'skipped'; });
+    function onPlanner(evt) {
+      const planned = Array.isArray(evt.planned_nodes) ? evt.planned_nodes : [];
+      const all = specialistIds();
+      plannedSpecialists = all.filter((id) => planned.indexOf(id) !== -1);
+
+      // A rejection is a valid planner outcome, not a planner failure.
+      const map = {};
+      map[topology.entry] = "done";
+      all.forEach((id) => {
+        map[id] = plannedSpecialists.indexOf(id) !== -1 ? "active" : "skipped";
+      });
+      if (evt.rejected) map[topology.final] = "active";
       setFlowStatus(map);
+
+      if (evt.rejected) {
+        setProgress(1, 1, "Question out of scope", "प्रश्न दायरे से बाहर");
+        progressNote.textContent = evt.rejection_reason || "";
+      } else {
+        setProgress(0, plannedSpecialists.length + 1,
+          `Running ${plannedSpecialists.length} specialist${plannedSpecialists.length === 1 ? "" : "s"}…`,
+          "विशेषज्ञ एजेंट चल रहे हैं…");
+      }
     }
 
-    function handleAgentDone(nodeName) {
-      if (nodeName === 'recommendation') {
-        setFlowStatus({ assessment: 'active' });
+    const STATUS_CLASS = { SUCCESS: "done", PARTIAL: "partial", FAILED: "failed" };
+
+    function onNodeDone(evt) {
+      if (evt.node === topology.final) {
+        setFlowStatus({ [topology.final]: STATUS_CLASS[evt.node_status] || "done" });
         return;
       }
-      doneAgentIds.add(nodeName);
-      setFlowStatus({ [nodeName]: 'done' });
-      if (requiredAgentIds.size && doneAgentIds.size >= requiredAgentIds.size) {
-        setFlowStatus({ assessment: 'active' });
+
+      finishedSpecialists.add(evt.node);
+      setFlowStatus({ [evt.node]: STATUS_CLASS[evt.node_status] || "done" });
+
+      const total = plannedSpecialists.length + 1;
+      setProgress(finishedSpecialists.size, total, "Gathering agent data…", "एजेंट डेटा एकत्र हो रहा है…");
+
+      if (plannedSpecialists.length && finishedSpecialists.size >= plannedSpecialists.length) {
+        setFlowStatus({ [topology.final]: "active" });
+        setProgress(finishedSpecialists.size, total, "Writing the assessment…", "आकलन तैयार हो रहा है…");
       }
     }
 
     try {
-      const res = await fetch('/api/ask/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/ask/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ latitude, longitude, question }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
-        let detail = '';
+        let detail = "";
         try {
           const body = await res.json();
-          detail = body.detail || '';
+          if (Array.isArray(body.detail)) {
+            detail = body.detail
+              .map((d) => `${(d.loc || []).slice(-1)[0] || "field"}: ${d.msg}`)
+              .join("; ");
+          } else if (typeof body.detail === "string") {
+            detail = body.detail;
+          } else if (typeof body.message === "string") {
+            detail = body.message;
+          }
         } catch (_) { /* body wasn't JSON */ }
 
-        if (res.status === 502 || res.status === 504) {
-          showFault(
-            `NO SIGNAL (${res.status})`,
-            "One of ORCAWA's marine data sources didn't respond in time \u2014 this can happen when a backend is cold-starting. Wait about a minute and try again. / ORCAWA के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।"
-          );
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+          showFault(`NO SIGNAL (${res.status})`,
+            "One of ORCAWA's marine data sources didn't respond in time — this can happen when a backend is cold-starting. Wait about a minute and try again. / ORCAWA के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।");
+        } else if (res.status === 422) {
+          showFault("REQUEST REJECTED (422)",
+            detail || "Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।");
         } else if (res.status >= 500) {
-          showFault(`INSTRUMENT FAULT (${res.status})`, detail || 'The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।');
+          showFault(`INSTRUMENT FAULT (${res.status})`,
+            detail || "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
         } else {
-          showFault(`REQUEST REJECTED (${res.status})`, detail || 'Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।');
+          showFault(`REQUEST REJECTED (${res.status})`,
+            detail || "Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।");
         }
         return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let stopped = false;
+      let buffer = "";
 
-      while (!stopped) {
+      while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        let sepIndex;
-        while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
-          const rawEvent = buffer.slice(0, sepIndex);
-          buffer = buffer.slice(sepIndex + 2);
-          const line = rawEvent.split('\n').find(l => l.startsWith('data:'));
+        let sep;
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+
+          const line = raw.split("\n").find((l) => l.startsWith("data:"));
           if (!line) continue;
 
           let evt;
           try { evt = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
 
-          if (evt.type === 'node_done') {
-            if (evt.node === 'planner') handlePlannerEvent(evt.plan);
-            else handleAgentDone(evt.node);
-          } else if (evt.type === 'final') {
-            setFlowStatus({ assessment: 'done' });
+          if (evt.type === "node_done") {
+            if (evt.node === topology.entry) onPlanner(evt);
+            else onNodeDone(evt);
+          } else if (evt.type === "heartbeat") {
+            // The server is alive; the elapsed clock is already local.
+          } else if (evt.type === "final") {
             finalData = evt;
-          } else if (evt.type === 'error') {
-            showFault('INSTRUMENT FAULT', evt.detail || 'The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।');
-            stopped = true;
+          } else if (evt.type === "error") {
+            hardError = evt.detail || "";
           }
         }
       }
 
-      if (stopped) return;
-
-      if (finalData) {
+      if (finalData && finalData.status !== "ERROR") {
+        setFlowStatus({ [topology.final]: "done" });
+        setProgress(1, 1, "Assessment ready", "आकलन तैयार");
+        lastResult = finalData;
         renderResults(finalData, latitude, longitude);
+      } else if (finalData || hardError) {
+        setFlowStatus({ [topology.final]: "failed" });
+        showFault("INSTRUMENT FAULT",
+          hardError || (finalData && finalData.error) ||
+          "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
       } else {
-        showFault('NO SIGNAL', "The pipeline stream ended without a final result. Try again. / प्रक्रिया अधूरी समाप्त हुई, फिर कोशिश करें।");
+        showFault("NO SIGNAL",
+          "The pipeline stream ended without a final result. Try again. / प्रक्रिया अधूरी समाप्त हुई, फिर कोशिश करें।");
       }
-
     } catch (err) {
-      showFault('NO SIGNAL', "Couldn't reach ORCAWA's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
+      if (err && err.name === "AbortError") return;
+      showFault("NO SIGNAL",
+        "Couldn't reach ORCAWA's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
     } finally {
-      loadingLine.classList.remove('show');
-      runBtn.disabled = false;
-      runBtn.textContent = 'Run assessment';
+      if (inFlight === controller) inFlight = null;
+      stopElapsed();
+      setRunButton("idle");
     }
   }
 
-  function renderResults(data, latitude, longitude) {
-    const rec = data.recommendation || {};
-    const risk = String(rec.risk_level || 'UNKNOWN').toUpperCase();
-    const plan = data.plan || {};
+  // ==========================================================
+  // Rendering
+  // ==========================================================
 
-    document.getElementById('riskDot').style.background = RISK_COLORS[risk] || RISK_COLORS.UNKNOWN;
-    document.getElementById('riskText').textContent = risk;
-    document.getElementById('riskActivity').textContent = plan.activity ? `for ${plan.activity}` : '';
-
-    document.getElementById('locValue').textContent = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
-    document.getElementById('locSub').textContent =
-      `${plan.date || 'today'} \u00b7 assessed in ${data.duration_seconds ?? '\u2014'}s`;
-
-    document.getElementById('summaryText').textContent =
-      rec.summary || 'No summary was returned for this location.';
-
-    const recBanner = document.getElementById('recBanner');
-    const recText = rec.recommendation && rec.recommendation.trim();
-    document.getElementById('recText').textContent =
-      recText || 'No specific recommendation was returned \u2014 review the findings below.';
-    recBanner.style.borderColor = recText ? 'rgba(95,185,139,0.32)' : 'rgba(201,161,90,0.32)';
-    recBanner.style.background = recText ? 'rgba(95,185,139,0.07)' : 'rgba(201,161,90,0.07)';
-
-    const findingsList = document.getElementById('findingsList');
-    findingsList.innerHTML = '';
-    (rec.key_findings || []).forEach(f => {
-      const li = document.createElement('li');
-      li.textContent = f;
-      findingsList.appendChild(li);
+  function fillList(listEl, panelEl, items) {
+    listEl.innerHTML = "";
+    const values = Array.isArray(items) ? items.filter(Boolean) : [];
+    values.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = typeof item === "string" ? item : JSON.stringify(item);
+      listEl.appendChild(li);
     });
-    document.getElementById('findingsPanel').style.display =
-      (rec.key_findings || []).length ? '' : 'none';
-
-    const adviceList = document.getElementById('adviceList');
-    adviceList.innerHTML = '';
-    (rec.safety_advice || []).forEach(a => {
-      const li = document.createElement('li');
-      li.textContent = a;
-      adviceList.appendChild(li);
-    });
-    document.getElementById('advicePanel').style.display =
-      (rec.safety_advice || []).length ? '' : 'none';
-
-    document.getElementById('rawData').textContent =
-      JSON.stringify(rec.agent_findings || {}, null, 2);
-
-    faultPanel.classList.remove('show');
-    results.classList.add('show');
+    panelEl.style.display = values.length ? "" : "none";
   }
 
-  runBtn.addEventListener('click', runAssessment);
-  faultRetry.addEventListener('click', runAssessment);
-  questionEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAssessment();
+  function statusPill(status) {
+    const s = String(status || "").toUpperCase();
+    if (s === "SUCCESS") return '<span class="pill ok">success</span>';
+    if (s === "PARTIAL") return '<span class="pill partial">partial</span>';
+    if (s === "FAILED") return '<span class="pill fail">failed</span>';
+    return `<span class="pill muted">${esc(s || "unknown")}</span>`;
+  }
+
+  function renderAgents(agents) {
+    const list = $("agentList");
+    list.innerHTML = "";
+
+    const ids = Object.keys(agents || {});
+    if (!ids.length) {
+      list.innerHTML = '<div class="empty">No agent envelopes were returned for this run.</div>';
+      return;
+    }
+
+    const order = specialistIds();
+    ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+
+    ids.forEach((id) => {
+      const meta = nodeById[id] || { label: id, label_hi: "" };
+      const payload = agents[id];
+      const status = payload && typeof payload === "object" ? payload.status : null;
+
+      const card = document.createElement("details");
+      card.className = "agent-card";
+      card.innerHTML =
+        `<summary><span class="agent-name">${biSlash(meta.label, meta.label_hi)}</span>${statusPill(status)}</summary>` +
+        `<pre></pre>`;
+      card.querySelector("pre").textContent = JSON.stringify(payload, null, 2);
+      list.appendChild(card);
+    });
+  }
+
+  function renderResults(data, latitude, longitude) {
+    const rec = (data && data.recommendation) || {};
+    const plan = (data && data.plan) || {};
+    const risk = String(rec.risk_level || "UNKNOWN").toUpperCase();
+
+    // Planner rejection is a legitimate outcome, not a failure.
+    const rejectNotice = $("rejectNotice");
+    if (data.rejected) {
+      $("rejectText").textContent =
+        data.rejection_reason ||
+        "This question is outside what ORCAWA can assess for the given location.";
+      rejectNotice.classList.add("show");
+    } else {
+      rejectNotice.classList.remove("show");
+    }
+
+    const riskPanel = $("riskPanel");
+    riskPanel.style.setProperty("--risk-color", RISK_COLORS[risk] || RISK_COLORS.UNKNOWN);
+    $("riskText").textContent = risk;
+    $("riskActivity").textContent = plan.activity && plan.activity !== "unknown"
+      ? `for ${plan.activity}` : "";
+
+    $("locValue").textContent = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+
+    const nodesRun = Array.isArray(data.completed_nodes) ? data.completed_nodes.length : 0;
+    $("locSub").textContent =
+      `${plan.date || "today"} · ${nodesRun} node${nodesRun === 1 ? "" : "s"} · ${data.duration_seconds != null ? data.duration_seconds : "—"}s`;
+
+    $("summaryText").textContent =
+      rec.summary || "No summary was returned for this location.";
+
+    const recBanner = $("recBanner");
+    const recText = typeof rec.recommendation === "string" ? rec.recommendation.trim() : "";
+    $("recText").textContent =
+      recText || "No specific recommendation was returned — review the findings below.";
+    recBanner.style.borderColor = recText ? "rgba(95,185,139,0.32)" : "rgba(201,161,90,0.32)";
+    recBanner.style.background = recText ? "rgba(95,185,139,0.07)" : "rgba(201,161,90,0.07)";
+
+    fillList($("findingsList"), $("findingsPanel"), rec.key_findings);
+    fillList($("adviceList"), $("advicePanel"), rec.safety_advice);
+
+    // Raw per-agent envelopes straight from the graph state, falling
+    // back to whatever the LLM put in agent_findings.
+    renderAgents(
+      data.agents && Object.keys(data.agents).length ? data.agents : rec.agent_findings || {}
+    );
+
+    faultPanel.classList.remove("show");
+    placeholder.style.display = "none";
+    results.classList.add("show");
+  }
+
+  // ==========================================================
+  // Result actions
+  // ==========================================================
+
+  function plainTextResult(data) {
+    const rec = (data && data.recommendation) || {};
+    const lines = [
+      `ORCAWA assessment — ${data.latitude}, ${data.longitude}`,
+      `Question: ${data.question || ""}`,
+      `Risk level: ${rec.risk_level || "UNKNOWN"}`,
+      "",
+      rec.summary || "",
+      "",
+      `Recommendation: ${rec.recommendation || "—"}`,
+    ];
+    if (Array.isArray(rec.key_findings) && rec.key_findings.length) {
+      lines.push("", "Key findings:", ...rec.key_findings.map((f) => `  - ${f}`));
+    }
+    if (Array.isArray(rec.safety_advice) && rec.safety_advice.length) {
+      lines.push("", "Safety advisory:", ...rec.safety_advice.map((a) => `  - ${a}`));
+    }
+    return lines.join("\n");
+  }
+
+  $("copyBtn").addEventListener("click", async () => {
+    if (!lastResult) return;
+    const btn = $("copyBtn");
+    try {
+      await navigator.clipboard.writeText(plainTextResult(lastResult));
+      btn.textContent = "Copied";
+    } catch (_) {
+      btn.textContent = "Copy failed";
+    }
+    setTimeout(() => { btn.textContent = "Copy assessment"; }, 1800);
   });
+
+  $("jsonBtn").addEventListener("click", () => {
+    if (!lastResult) return;
+    const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orcawa-${lastResult.latitude}-${lastResult.longitude}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // ==========================================================
+  // Wiring
+  // ==========================================================
+
+  runBtn.addEventListener("click", runAssessment);
+  faultRetry.addEventListener("click", runAssessment);
+  questionEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runAssessment();
+  });
+
+  showPlaceholder("idle");
+})();
 </script>
 
 </body>
