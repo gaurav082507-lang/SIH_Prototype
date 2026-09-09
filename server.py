@@ -217,7 +217,7 @@ app = FastAPI(
     ),
     # Bump this whenever the wire behaviour changes — /api/health is the
     # only way to tell from outside which build Render is actually running.
-    version="1.2.0",
+    version="1.3.0",
 )
 
 
@@ -360,6 +360,34 @@ def favicon():
     return Response(status_code=204)
 
 
+def _rss_mb() -> float | None:
+    """
+    Resident memory of this process, in MB.
+
+    A container that is killed for exceeding its memory limit dies by
+    SIGKILL: no traceback, no Python-level handler, and any open SSE
+    stream simply closes. Reporting RSS is the only way to see that
+    coming from outside.
+    """
+
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024.0, 1)
+    except Exception:
+        pass
+
+    try:
+        import resource
+
+        # ru_maxrss is KB on Linux, bytes on macOS.
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round((peak / 1024.0) if peak > 1_000_000 else peak / 1024.0, 1)
+    except Exception:
+        return None
+
+
 def _health_payload() -> dict[str, Any]:
     return {
         "status": "ok",
@@ -371,6 +399,7 @@ def _health_payload() -> dict[str, Any]:
         "stream_mode": "asyncio-queue",
         "heartbeat_seconds": HEARTBEAT_INTERVAL_S,
         "graph_timeout_seconds": GRAPH_TIMEOUT_S,
+        "memory_rss_mb": _rss_mb(),
         "graph_nodes": list(ALL_NODES),
         "frontend": INDEX_FILE.exists(),
     }
@@ -404,11 +433,99 @@ def api_info():
         "endpoints": {
             "frontend": "/",
             "health": "/api/health",
+            "selftest": "/api/selftest",
             "graph": "/api/graph",
             "ask": "/api/ask",
             "stream": "/api/ask/stream",
         },
     }
+
+
+@app.get("/api/selftest")
+def selftest(
+    step: str = "all",
+    latitude: float = 19.0760,
+    longitude: float = 72.8777,
+):
+    """
+    Isolate which part of the planner is killing the process.
+
+    The SSE stream closing mid-run with heartbeats still flowing means
+    the worker process died without raising — which a Python handler
+    cannot catch and a traceback cannot show. Run the planner's steps
+    one at a time here and watch `rss_mb_after`:
+
+        /api/selftest?step=mem       - baseline memory, imports only
+        /api/selftest?step=coastal   - the land-mask coastal check
+        /api/selftest?step=planner   - the full planner node (LLM call)
+
+    If a step never returns and the service restarts, that step is the
+    one exhausting the instance.
+    """
+
+    order = ["mem", "coastal", "planner"]
+    steps = order if step == "all" else [step]
+
+    results: list[dict[str, Any]] = []
+
+    for name in steps:
+        started = time.monotonic()
+        entry: dict[str, Any] = {"step": name, "rss_mb_before": _rss_mb()}
+
+        try:
+            if name == "mem":
+                entry["ok"] = True
+
+            elif name == "coastal":
+                from tools import check_coastal_proximity
+
+                entry["result"] = _clean_for_json(
+                    check_coastal_proximity.invoke(
+                        {
+                            "latitude": latitude,
+                            "longitude": longitude,
+                            "max_radius_km": 50,
+                        }
+                    )
+                )
+                entry["ok"] = True
+
+            elif name == "planner":
+                from planner_node import planner_node
+
+                output = planner_node(
+                    {
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "user_question": (
+                            "Is it safe to venture into the sea tomorrow morning?"
+                        ),
+                        "status": "STARTED",
+                    }
+                )
+
+                plan = _coerce_plan((output or {}).get("plan"))
+
+                entry["ok"] = True
+                entry["rejected"] = bool(plan.get("rejected", False))
+                entry["rejection_reason"] = plan.get("rejection_reason")
+                entry["required_agents"] = plan.get("required_agents")
+                entry["grid_points"] = len(plan.get("grid_points") or [])
+
+            else:
+                entry["ok"] = False
+                entry["error"] = f"unknown step {name!r} (try: {', '.join(order)})"
+
+        except Exception as exc:
+            traceback.print_exc()
+            entry["ok"] = False
+            entry["error"] = f"{type(exc).__name__}: {exc}"
+
+        entry["seconds"] = round(time.monotonic() - started, 2)
+        entry["rss_mb_after"] = _rss_mb()
+        results.append(entry)
+
+    return {"steps": results}
 
 
 @app.get("/api/graph")
