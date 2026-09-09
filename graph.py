@@ -22,16 +22,14 @@ def route_after_planner(state: MarineState):
     """
     Decide which specialist agents should run after the planner.
 
-    GIS always runs because the system needs location/coastal
-    information.
-
+    GIS always runs.
     Other agents run only when selected by the planner.
     """
 
     plan = state.get("plan", {})
 
     # --------------------------------------------------------
-    # Handle planner returning JSON as a string
+    # Planner may return JSON as a string
     # --------------------------------------------------------
     if isinstance(plan, str):
         import json
@@ -48,9 +46,7 @@ def route_after_planner(state: MarineState):
         return ["gis"]
 
     # --------------------------------------------------------
-    # If planner rejected the request, skip specialists.
-    # GIS is still useful for location information.
-    # Recommendation will generate the final response.
+    # If planner rejected the request
     # --------------------------------------------------------
     if plan.get("rejected", False):
         return ["gis"]
@@ -75,7 +71,7 @@ def route_after_planner(state: MarineState):
     routes = ["gis"]
 
     # --------------------------------------------------------
-    # Specialist routing
+    # Specialist agents
     # --------------------------------------------------------
     if "weather" in required_agents:
         routes.append("weather")
@@ -193,23 +189,14 @@ builder.add_node(
 
 
 # ============================================================
-# RECOMMENDATION
+# RECOMMENDATION AGENT
 # ============================================================
 #
-# IMPORTANT:
+# defer=True makes recommendation execute after the pending
+# specialist branches have completed.
 #
-# This is the final fan-in node.
-#
-# The planner dynamically selects specialist agents, so not
-# every specialist executes on every request.
-#
-# defer=True tells LangGraph to delay recommendation until
-# pending branch work is finished.
-#
-# This prevents the final recommendation stage from being
-# scheduled incorrectly while the dynamically selected
-# specialist branches are still completing.
-#
+# This is important because the planner dynamically selects
+# which specialist agents should run.
 # ============================================================
 
 builder.add_node(
@@ -234,7 +221,7 @@ builder.add_edge(
 
 
 # ============================================================
-# PLANNER -> DYNAMIC SPECIALISTS
+# PLANNER -> SPECIALIST AGENTS
 # ============================================================
 
 builder.add_conditional_edges(
@@ -253,7 +240,7 @@ builder.add_conditional_edges(
 
 
 # ============================================================
-# SPECIALISTS -> RECOMMENDATION
+# SPECIALIST AGENTS -> RECOMMENDATION
 # ============================================================
 
 builder.add_edge(
@@ -283,7 +270,7 @@ builder.add_edge(
 
 builder.add_edge(
     "pfz",
-    "recommendation,
+    "recommendation",
 )
 
 builder.add_edge(
@@ -303,23 +290,27 @@ builder.add_edge(
 
 
 # ============================================================
-# COMPILE
+# COMPILE GRAPH
 # ============================================================
 
 marine_graph = builder.compile()
 
 
+# ============================================================
+# STARTUP LOG
+# ============================================================
+
 print("\n" + "=" * 70)
 print("MARINE GRAPH COMPILED SUCCESSFULLY")
 print("=" * 70)
-print("Flow:")
-print("START")
-print("  ↓")
-print("PLANNER")
-print("  ↓")
-print("GIS + selected specialists")
-print("  ↓")
-print("RECOMMENDATION [DEFERRED]")
-print("  ↓")
-print("END")
+print("Graph flow:")
+print("  START")
+print("    ↓")
+print("  PLANNER")
+print("    ↓")
+print("  GIS + selected specialist agents")
+print("    ↓")
+print("  RECOMMENDATION")
+print("    ↓")
+print("  END")
 print("=" * 70 + "\n")
