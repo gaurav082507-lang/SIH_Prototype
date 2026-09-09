@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ORCAWA — Marine Conditions Intelligence</title>
-<meta name="description" content="ORCAWA reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment, in English and Hindi." />
+<title>Samudra — Marine Conditions Intelligence</title>
+<meta name="description" content="Samudra reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment, in English and Hindi." />
 <meta name="theme-color" content="#061622" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -511,7 +511,7 @@
           <circle cx="17" cy="10.5" r="1.6" fill="#c9a15a"/>
         </svg>
         <div>
-          <div class="brand-word">ORCAWA</div>
+          <div class="brand-word">SAMUDRA</div>
           <div class="brand-tag">Marine conditions intelligence<span class="hi">समुद्री स्थिति सूचना</span></div>
         </div>
       </div>
@@ -535,7 +535,7 @@
 
     <section class="hero">
       <h1>Know the water before you go.<span class="hi">जाने से पहले समुद्र को जानें</span></h1>
-      <p>Ask a plain question about a coastal spot. ORCAWA checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। ORCAWA हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
+      <p>Ask a plain question about a coastal spot. Samudra checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। Samudra हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
     </section>
 
     <section class="flow-section" id="flowSection" aria-label="Pipeline progress">
@@ -581,7 +581,7 @@
         </div>
 
         <button class="run-btn" id="runBtn" type="button"></button>
-        <div class="console-hint">Typically 15&ndash;40s &mdash; ORCAWA calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
+        <div class="console-hint">Typically 15&ndash;40s &mdash; Samudra calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
 
         <div class="progress-block" id="progressBlock">
           <div class="progress-head">
@@ -670,8 +670,8 @@
   </main>
 
   <footer>
-    <span>ORCAWA draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.<span class="hi">ORCAWA खुले समुद्री पूर्वानुमान, ज्वार केंद्रों और तटीय रजिस्ट्री से जानकारी लेता है। रवाना होने से पहले हमेशा स्थानीय अधिकारियों से पुष्टि करें।</span></span>
-    <span>&copy; <span id="year"></span> ORCAWA</span>
+    <span>Samudra draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.<span class="hi">Samudra खुले समुद्री पूर्वानुमान, ज्वार केंद्रों और तटीय रजिस्ट्री से जानकारी लेता है। रवाना होने से पहले हमेशा स्थानीय अधिकारियों से पुष्टि करें।</span></span>
+    <span>&copy; <span id="year"></span> Samudra</span>
   </footer>
 
 </div>
@@ -937,8 +937,8 @@
     if (mode === "running") {
       $("placeholderTitle").innerHTML = bi("Assessment in progress", "आकलन जारी है");
       $("placeholderBody").innerHTML = bi(
-        "ORCAWA is calling live marine data sources. Progress is shown above.",
-        "ORCAWA लाइव समुद्री डेटा स्रोतों से जानकारी ले रहा है। प्रगति ऊपर दिख रही है।"
+        "Samudra is calling live marine data sources. Progress is shown above.",
+        "Samudra लाइव समुद्री डेटा स्रोतों से जानकारी ले रहा है। प्रगति ऊपर दिख रही है।"
       );
     } else {
       $("placeholderTitle").innerHTML = bi("No assessment yet", "अभी तक कोई आकलन नहीं");
@@ -1093,6 +1093,10 @@
     let lastHeartbeat = null;
     let lastRss = null;
 
+    // The completed assessment, kept from the recommendation node's own
+    // event so a lost `final` event doesn't lose the result with it.
+    let salvaged = null;
+
     function onPlanner(evt) {
       const planned = Array.isArray(evt.planned_nodes) ? evt.planned_nodes : [];
       const all = specialistIds();
@@ -1123,6 +1127,30 @@
     function onNodeDone(evt) {
       if (evt.node === topology.final) {
         setFlowStatus({ [topology.final]: STATUS_CLASS[evt.node_status] || "done" });
+
+        // The assessment is complete at this point. The `final` event
+        // that follows carries the bulky agent data and is the most
+        // likely thing to be lost, so keep what the user came for the
+        // moment it arrives.
+        if (evt.recommendation) {
+          salvaged = {
+            latitude: latitude,
+            longitude: longitude,
+            question: question,
+            recommendation: evt.recommendation,
+            plan: {
+              activity: evt.activity,
+              date: evt.date,
+            },
+            rejected: !!evt.rejected,
+            timed_out: !!evt.timed_out,
+            rejection_reason: evt.rejection_reason,
+            agents: {},
+            completed_nodes: evt.completed_nodes || [],
+            duration_seconds: evt.elapsed_seconds,
+            partial: true,
+          };
+        }
         return;
       }
 
@@ -1163,7 +1191,7 @@
 
         if (res.status === 502 || res.status === 503 || res.status === 504) {
           showFault(`NO SIGNAL (${res.status})`,
-            "One of ORCAWA's marine data sources didn't respond in time — this can happen when a backend is cold-starting. Wait about a minute and try again. / ORCAWA के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।");
+            "One of Samudra's marine data sources didn't respond in time — this can happen when a backend is cold-starting. Wait about a minute and try again. / Samudra के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।");
         } else if (res.status === 422) {
           showFault("REQUEST REJECTED (422)",
             detail || "Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।");
@@ -1200,16 +1228,17 @@
           eventCount += 1;
           lastEventType = evt.type || "unknown";
 
+          if (evt.memory_rss_mb != null) {
+            lastRss = evt.memory_rss_mb;
+            progressNote.textContent = `server memory ${lastRss} MB`;
+          }
+
           if (evt.type === "node_done") {
             if (evt.node === topology.entry) onPlanner(evt);
             else onNodeDone(evt);
           } else if (evt.type === "heartbeat") {
             // The server is alive; the elapsed clock is already local.
             lastHeartbeat = evt.elapsed_seconds;
-            if (evt.memory_rss_mb != null) {
-              lastRss = evt.memory_rss_mb;
-              progressNote.textContent = `server memory ${lastRss} MB`;
-            }
           } else if (evt.type === "final") {
             finalData = evt;
           } else if (evt.type === "error") {
@@ -1228,6 +1257,15 @@
         showFault("INSTRUMENT FAULT",
           hardError || (finalData && finalData.error) ||
           "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
+      } else if (salvaged) {
+        // The stream died after the assessment was written but before
+        // the final event landed. The result is here; only the
+        // technical readout is missing. Show it rather than throwing
+        // away a completed run.
+        setFlowStatus({ [topology.final]: "done" });
+        setProgress(1, 1, "Assessment ready", "आकलन तैयार");
+        lastResult = salvaged;
+        renderResults(salvaged, latitude, longitude);
       } else {
         // The connection closed with no terminal event. Report how far
         // it got — that is the difference between "the server never
@@ -1252,7 +1290,7 @@
     } catch (err) {
       if (err && err.name === "AbortError") return;
       showFault("NO SIGNAL",
-        "Couldn't reach ORCAWA's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
+        "Couldn't reach Samudra's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
     } finally {
       if (inFlight === controller) inFlight = null;
       stopElapsed();
@@ -1283,13 +1321,15 @@
     return `<span class="pill muted">${esc(s || "unknown")}</span>`;
   }
 
-  function renderAgents(agents) {
+  function renderAgents(agents, note) {
     const list = $("agentList");
     list.innerHTML = "";
 
     const ids = Object.keys(agents || {});
     if (!ids.length) {
-      list.innerHTML = '<div class="empty">No agent envelopes were returned for this run.</div>';
+      list.innerHTML = `<div class="empty">${esc(
+        note || "No agent envelopes were returned for this run."
+      )}</div>`;
       return;
     }
 
@@ -1327,7 +1367,7 @@
         : bi("Out of scope", "दायरे से बाहर");
       $("rejectText").textContent =
         data.rejection_reason ||
-        "This question is outside what ORCAWA can assess for the given location.";
+        "This question is outside what Samudra can assess for the given location.";
       rejectNotice.classList.add("show");
     } else {
       rejectNotice.classList.remove("show");
@@ -1361,7 +1401,14 @@
     // Raw per-agent envelopes straight from the graph state, falling
     // back to whatever the LLM put in agent_findings.
     renderAgents(
-      data.agents && Object.keys(data.agents).length ? data.agents : rec.agent_findings || {}
+      data.agents && Object.keys(data.agents).length
+        ? data.agents
+        : rec.agent_findings || {},
+      data.partial
+        ? "The assessment arrived, but the connection closed before the agent data did. The result above is complete; only this readout is missing."
+        : data.agents_omitted
+        ? `Agent data was omitted: ${data.agents_omitted}`
+        : null
     );
 
     faultPanel.classList.remove("show");
@@ -1376,7 +1423,7 @@
   function plainTextResult(data) {
     const rec = (data && data.recommendation) || {};
     const lines = [
-      `ORCAWA assessment — ${data.latitude}, ${data.longitude}`,
+      `Samudra assessment — ${data.latitude}, ${data.longitude}`,
       `Question: ${data.question || ""}`,
       `Risk level: ${rec.risk_level || "UNKNOWN"}`,
       "",
@@ -1411,7 +1458,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `orcawa-${lastResult.latitude}-${lastResult.longitude}.json`;
+    a.download = `samudra-${lastResult.latitude}-${lastResult.longitude}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
