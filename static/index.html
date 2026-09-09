@@ -1250,8 +1250,17 @@
       if (finalData && finalData.status !== "ERROR") {
         setFlowStatus({ [topology.final]: "done" });
         setProgress(1, 1, "Assessment ready", "आकलन तैयार");
-        lastResult = finalData;
-        renderResults(finalData, latitude, longitude);
+
+        // If the final event arrived stripped (the server replaces an
+        // oversized frame with a stub rather than dropping the
+        // connection), fall back to the copy kept from the
+        // recommendation node.
+        const best = (!finalData.recommendation && salvaged)
+          ? Object.assign({}, salvaged, { duration_seconds: finalData.duration_seconds })
+          : finalData;
+
+        lastResult = best;
+        renderResults(best, latitude, longitude);
       } else if (finalData || hardError) {
         setFlowStatus({ [topology.final]: "failed" });
         showFault("INSTRUMENT FAULT",
