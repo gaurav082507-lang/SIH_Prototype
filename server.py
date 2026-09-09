@@ -215,7 +215,9 @@ app = FastAPI(
         "Agentic AI platform for ocean, weather, tide, "
         "cyclone and ecosystem analysis."
     ),
-    version="1.1.0",
+    # Bump this whenever the wire behaviour changes — /api/health is the
+    # only way to tell from outside which build Render is actually running.
+    version="1.2.0",
 )
 
 
@@ -363,6 +365,12 @@ def _health_payload() -> dict[str, Any]:
         "status": "ok",
         "service": "ORCA Marine Intelligence API",
         "version": app.version,
+        # "asyncio-queue" means the SSE loop no longer polls the ASGI
+        # receive channel. If you see "polling" here, the older build is
+        # still deployed.
+        "stream_mode": "asyncio-queue",
+        "heartbeat_seconds": HEARTBEAT_INTERVAL_S,
+        "graph_timeout_seconds": GRAPH_TIMEOUT_S,
         "graph_nodes": list(ALL_NODES),
         "frontend": INDEX_FILE.exists(),
     }
