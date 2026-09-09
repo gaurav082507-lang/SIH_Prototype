@@ -10,11 +10,14 @@
 # Wrapping each node means a slow agent degrades to "no data" for that
 # agent while every other branch still reaches the recommendation node.
 #
-# Defaults (override per deployment with env vars):
+# Defaults (override per deployment with env vars). Set generously —
+# a marine service that is merely slow should never be the reason an
+# assessment fails, and an agent that overruns costs nothing but its
+# own contribution:
 #
-#     planner            90s   PLANNER_TIMEOUT_S
-#     recommendation     90s   RECOMMENDATION_TIMEOUT_S
-#     every specialist   60s   AGENT_TIMEOUT_S
+#     planner           180s   PLANNER_TIMEOUT_S
+#     recommendation    180s   RECOMMENDATION_TIMEOUT_S
+#     every specialist  120s   AGENT_TIMEOUT_S
 #
 # A single agent can be given its own budget with AGENT_TIMEOUT_<NAME>,
 # e.g. AGENT_TIMEOUT_TIDE=120 for a tide service known to be slow.
@@ -56,9 +59,9 @@ def _env_float(name: str, default: float) -> float:
     return value if value > 0 else default
 
 
-DEFAULT_AGENT_TIMEOUT_S = _env_float("AGENT_TIMEOUT_S", 60.0)
-PLANNER_TIMEOUT_S = _env_float("PLANNER_TIMEOUT_S", 90.0)
-RECOMMENDATION_TIMEOUT_S = _env_float("RECOMMENDATION_TIMEOUT_S", 90.0)
+DEFAULT_AGENT_TIMEOUT_S = _env_float("AGENT_TIMEOUT_S", 120.0)
+PLANNER_TIMEOUT_S = _env_float("PLANNER_TIMEOUT_S", 180.0)
+RECOMMENDATION_TIMEOUT_S = _env_float("RECOMMENDATION_TIMEOUT_S", 180.0)
 
 # Specialists run in parallel, so the pool has to be at least as wide
 # as the widest fan-out (7 specialists) plus the planner and the
