@@ -281,7 +281,7 @@ app = FastAPI(
     ),
     # Bump this whenever the wire behaviour changes — /api/health is the
     # only way to tell from outside which build Render is actually running.
-    version="1.7.0",
+    version="1.8.0",
 )
 
 
@@ -700,19 +700,50 @@ def _clean_for_json(value: Any, _depth: int = 0, _seen: set[int] | None = None) 
     return str(value)
 
 
+# No single event may exceed this. A 1.25 MB frame was enough to end
+# the connection mid-stream while the server carried on none the wiser,
+# so this is enforced at the point every frame is written rather than
+# trusted to each caller.
+MAX_EVENT_BYTES = int(os.getenv("MAX_EVENT_BYTES", "131072"))
+
+
 def _sse(event: dict[str, Any]) -> str:
     """
     Render one Server-Sent Event.
 
         data: {"type":"node_done","node":"planner"}
 
+    An oversized event is replaced by a stub rather than sent: losing
+    one event's detail is recoverable, losing the connection is not.
     """
 
-    return (
-        "data: "
-        + json.dumps(_clean_for_json(event), ensure_ascii=False)
-        + "\n\n"
-    )
+    body = json.dumps(_clean_for_json(event), ensure_ascii=False)
+
+    if len(body) > MAX_EVENT_BYTES:
+        _log(
+            f"event type={event.get('type')} node={event.get('node')} was "
+            f"{len(body)} bytes, over the {MAX_EVENT_BYTES} limit — "
+            "sent as a stub"
+        )
+
+        body = json.dumps(
+            {
+                "type": event.get("type"),
+                "node": event.get("node"),
+                "status": event.get("status"),
+                "node_status": event.get("node_status"),
+                "completed_nodes": event.get("completed_nodes"),
+                "oversized": True,
+                "original_bytes": len(body),
+                "detail": (
+                    "This event exceeded the per-event stream limit and was "
+                    "replaced to keep the connection alive."
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    return "data: " + body + "\n\n"
 
 
 # ============================================================
@@ -766,6 +797,47 @@ def _recommendation_of(state: dict[str, Any]) -> Any:
     return state.get("recommendation")
 
 
+# The fields the UI actually reads out of a recommendation.
+#
+# `agent_findings` is deliberately absent. recommendation_node copies
+# every agent's raw output into it, which measured 1.25 MB on the
+# deployed service — in a single SSE frame, twice per run. The same
+# data already ships as `agents`, so this is pure duplication, and it
+# was large enough to break the connection before the browser could
+# read it.
+RECOMMENDATION_KEYS: tuple[str, ...] = (
+    "summary",
+    "risk_level",
+    "recommendation",
+    "key_findings",
+    "safety_advice",
+    "error",
+    "timed_out",
+)
+
+
+def _slim_recommendation(value: Any) -> Any:
+    """The recommendation as the UI needs it, without the duplicated bulk."""
+
+    if not isinstance(value, dict):
+        return _clean_for_json(value)
+
+    slim: dict[str, Any] = {
+        key: _clean_for_json(value[key])
+        for key in RECOMMENDATION_KEYS
+        if key in value
+    }
+
+    dropped = [key for key in value if key not in RECOMMENDATION_KEYS]
+
+    if dropped:
+        # Named rather than silently vanished, so nobody wonders where
+        # agent_findings went.
+        slim["omitted_keys"] = dropped
+
+    return slim
+
+
 def _agents_of(state: dict[str, Any]) -> dict[str, Any]:
     """Every specialist envelope currently present in the state."""
 
@@ -780,12 +852,12 @@ def _agents_of(state: dict[str, Any]) -> dict[str, Any]:
 # The final event used to concatenate every envelope and serialise the
 # lot in one go, which made it far and away the biggest thing the
 # stream sends — and the last thing that happens before the run ends.
-MAX_AGENT_JSON_BYTES = int(os.getenv("MAX_AGENT_JSON_BYTES", "48000"))
+MAX_AGENT_JSON_BYTES = int(os.getenv("MAX_AGENT_JSON_BYTES", "16000"))
 
 # And a ceiling on the assembled final frame, whatever the per-agent
 # sizes add up to. Past this the assessment is sent without the
 # technical readout rather than not sent at all.
-MAX_FINAL_EVENT_BYTES = int(os.getenv("MAX_FINAL_EVENT_BYTES", "262144"))
+MAX_FINAL_EVENT_BYTES = int(os.getenv("MAX_FINAL_EVENT_BYTES", "131072"))
 
 
 def _bounded_agents(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
@@ -964,7 +1036,7 @@ def _node_event(
         # the thing the user actually asked for.
         plan = _plan_of(state)
 
-        event["recommendation"] = _clean_for_json(_recommendation_of(state))
+        event["recommendation"] = _slim_recommendation(_recommendation_of(state))
         event["rejected"] = bool(plan.get("rejected", False))
         event["timed_out"] = bool(plan.get("timed_out", False))
         event["rejection_reason"] = plan.get("rejection_reason")
@@ -1002,7 +1074,7 @@ def _final_event(
         "rejected": bool(plan.get("rejected", False)),
         "timed_out": bool(plan.get("timed_out", False)),
         "rejection_reason": plan.get("rejection_reason"),
-        "recommendation": _recommendation_of(state),
+        "recommendation": _slim_recommendation(_recommendation_of(state)),
         # Raw per-specialist envelopes, straight from MarineState, each
         # capped independently. The UI's technical readout used to rely
         # on the LLM populating recommendation.agent_findings, which is
@@ -1049,7 +1121,7 @@ def _minimal_final_event(
         "rejected": bool(plan.get("rejected", False)),
         "timed_out": bool(plan.get("timed_out", False)),
         "rejection_reason": plan.get("rejection_reason"),
-        "recommendation": _clean_for_json(_recommendation_of(state)),
+        "recommendation": _slim_recommendation(_recommendation_of(state)),
         "agents": {},
         "agents_omitted": reason,
         "completed_nodes": list(completed),
@@ -1190,7 +1262,7 @@ def ask(payload: AskRequest, include_state: bool = False):
         "rejected": bool(plan.get("rejected", False)),
         "timed_out": bool(plan.get("timed_out", False)),
         "rejection_reason": plan.get("rejection_reason"),
-        "recommendation": _clean_for_json(_recommendation_of(final_state)),
+        "recommendation": _slim_recommendation(_recommendation_of(final_state)),
         "agents": agents,
         "agent_bytes": agent_bytes,
         "completed_nodes": completed,
