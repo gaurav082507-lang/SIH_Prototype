@@ -1,6 +1,6 @@
 # server.py
 #
-# ORCAWA / ORCA Marine Intelligence API.
+# Samudra Marine Intelligence API.
 #
 # This module is a thin HTTP layer over the LangGraph pipeline in
 # graph.py. It deliberately owns NO pipeline logic of its own:
@@ -15,7 +15,7 @@
 #     are exactly the keys declared in state.MarineState.
 #
 # Endpoints
-#   GET  /                  ORCAWA frontend (static/index.html)
+#   GET  /                  Samudra frontend (static/index.html)
 #   GET  /health            liveness probe
 #   GET  /api/health        same probe (Render's healthCheckPath)
 #   GET  /api               API metadata
@@ -217,7 +217,7 @@ def _graph_topology() -> dict[str, Any]:
 # ============================================================
 
 app = FastAPI(
-    title="ORCA Marine Intelligence API",
+    title="Samudra Marine Intelligence API",
     description=(
         "Agentic AI platform for ocean, weather, tide, "
         "cyclone and ecosystem analysis."
@@ -317,7 +317,7 @@ _NO_STORE = {
 @app.get("/", include_in_schema=False)
 def home():
     """
-    Serve the ORCAWA frontend.
+    Serve the Samudra frontend.
 
     Expected layout:
 
@@ -398,7 +398,7 @@ def _rss_mb() -> float | None:
 def _health_payload() -> dict[str, Any]:
     return {
         "status": "ok",
-        "service": "ORCA Marine Intelligence API",
+        "service": "Samudra Marine Intelligence API",
         "version": app.version,
         # "asyncio-queue" means the SSE loop no longer polls the ASGI
         # receive channel. If you see "polling" here, the older build is
@@ -436,7 +436,7 @@ def api_info():
     """API metadata."""
 
     return {
-        "name": "ORCA Marine Intelligence API",
+        "name": "Samudra Marine Intelligence API",
         "version": app.version,
         "endpoints": {
             "frontend": "/",
@@ -1401,7 +1401,7 @@ async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
 
 @app.post("/api/ask/stream")
 async def ask_stream(payload: AskRequest):
-    """Streaming ORCAWA assessment."""
+    """Streaming Samudra assessment."""
 
     return StreamingResponse(
         _stream_ask_events(payload),
