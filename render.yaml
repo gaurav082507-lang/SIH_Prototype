@@ -7,19 +7,47 @@ services:
     branch: main
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+
+    # server.py registers both /health and /api/health. This path used
+    # to point at /api/health while only /health existed, so every
+    # deploy failed its health check.
     healthCheckPath: /api/health
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: GROQ_API_KEY
+
+      # ---- LLM -------------------------------------------------
+      # planner_node.py and recommendation_node.py both call Gemini
+      # through ChatGoogleGenerativeAI and read GOOGLE_API_KEY.
+      # (The previous GROQ_API_KEY / MISTRAL_API_KEY entries were
+      # never read by anything on the graph.py code path.)
+      - key: GOOGLE_API_KEY
         sync: false
-      - key: MISTRAL_API_KEY
-        sync: false
+
+      # Model overrides. The variable names are what the code reads —
+      # GROQ_MODEL_PLANNER is a leftover name for a Gemini model.
+      - key: GROQ_MODEL_PLANNER
+        value: gemini-2.0-flash-lite
+      - key: GEMINI_MODEL_RECOMMENDATION
+        value: gemini-2.0-flash-lite
+
+      # ---- Marine data services --------------------------------
       - key: CYCLONE_API_BASE_URL
         value: https://orca-backend-gkvo.onrender.com/api/cyclone
       - key: TIDE_API_URL
         value: https://orca-backend-tide.onrender.com/tide
       - key: GIS_API_URL
         value: https://orca-backend-gis.onrender.com/api/gis
+
+      # ---- Server behaviour ------------------------------------
+      # Now actually applied: server.py installs CORSMiddleware from
+      # this value. "*" is correct when the frontend is served by
+      # this same service.
       - key: ALLOWED_ORIGINS
         value: "*"
+
+      # Ceiling on one assessment, in seconds. The SSE stream sends a
+      # final ERROR event instead of hanging if a marine service stalls.
+      - key: GRAPH_TIMEOUT_SECONDS
+        value: "300"
