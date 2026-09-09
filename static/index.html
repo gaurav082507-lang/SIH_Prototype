@@ -1,1517 +1,2788 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Samudra — Marine Conditions Intelligence</title>
-<meta name="description" content="Samudra reads live weather, sea state, tide, and hazard data and turns it into one clear go / no-go marine assessment, in English and Hindi." />
-<meta name="theme-color" content="#061622" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg-deep:#061622;
-    --bg-mid:#0b2536;
-    --panel:rgba(234,242,246,0.045);
-    --panel-strong:rgba(234,242,246,0.075);
-    --line:rgba(234,242,246,0.11);
-    --line-soft:rgba(234,242,246,0.06);
-    --text:#eaf2f6;
-    --text-muted:#93aebb;
-    --text-faint:#5f7c8a;
-    --brass:#c9a15a;
-    --brass-soft:rgba(201,161,90,0.16);
-    --coral:#e2775a;
-    --coral-soft:rgba(226,119,90,0.12);
-    --low:#5fb98b;
-    --moderate:#c9a15a;
-    --high:#e2775a;
-    --severe:#d9564f;
-    --unknown:#6c8896;
-    --radius-sm:6px;
-    --radius-md:10px;
-    --radius-lg:14px;
-    --serif:'Fraunces', Georgia, serif;
-    --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    --mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
-    --hindi:'Noto Sans Devanagari', 'IBM Plex Sans', sans-serif;
-  }
+    <meta charset="UTF-8">
 
-  /* ---------------- Bilingual text ---------------- */
-  .hi{
-    display:block;
-    font-family:var(--hindi);
-    color:var(--text-faint);
-    font-weight:400;
-  }
-  .hi-inline{display:inline; margin-top:0;}
-  body.lang-en .hi{display:none !important;}
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-  label .hi, .panel-eyebrow .hi, .plabel .hi, .console-label .hi{
-    font-size:0.92em;
-    margin-top:2px;
-    color:var(--text-faint);
-    letter-spacing:0;
-  }
-  .hero h1 .hi{
-    font-size:0.5em;
-    color:var(--text-muted);
-    margin-top:10px;
-    font-weight:400;
-    line-height:1.3;
-  }
-  .hero p .hi{
-    margin:6px auto 0;
-    color:var(--text-faint);
-    font-size:0.95em;
-  }
-  .run-btn .hi{color:rgba(6,20,31,0.68); font-size:0.82em; margin-top:1px;}
-  .brand-tag .hi{margin-top:1px; font-size:1em;}
-  .rec-banner #recText .hi, #summaryText .hi{margin-top:6px;}
-  .fault-title .hi{margin-top:2px; color:#f4b3ae; font-size:0.9em;}
-  .placeholder .hi{color:var(--text-faint); font-size:0.95em; margin-top:4px;}
-  nav.top-links span{display:flex; flex-direction:column; gap:1px; text-align:left;}
-  nav.top-links .hi{font-size:0.82em; margin-top:0;}
-  footer span .hi{margin-top:3px; font-size:0.95em;}
+    <title>ORCA Marine Intelligence</title>
 
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
+    <!-- =========================
+         LEAFLET MAP
+    ========================== -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIINfQ3h6zD1kR6a5N5zD9n5n5n5n5n5n5="
+        crossorigin=""
+    >
 
-  body{
-    margin:0;
-    font-family:var(--sans);
-    color:var(--text);
-    background:
-      radial-gradient(ellipse 900px 500px at 50% -8%, rgba(18,60,82,0.5), transparent 60%),
-      radial-gradient(ellipse 700px 600px at 100% 8%, rgba(201,161,90,0.07), transparent 55%),
-      linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%);
-    background-attachment:fixed;
-    min-height:100vh;
-    line-height:1.5;
-    -webkit-font-smoothing:antialiased;
-  }
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  a{color:inherit;}
-  ::selection{background:var(--brass-soft); color:var(--text);}
-  button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible{
-    outline:2px solid var(--brass);
-    outline-offset:2px;
-  }
-  .sr-only{
-    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
-    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
-  }
+        :root {
+            --bg-main: #06111d;
+            --bg-secondary: #0a1928;
+            --bg-card: rgba(13, 31, 48, 0.82);
+            --bg-card-hover: rgba(17, 42, 63, 0.95);
 
-  .wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
-  @media (max-width:560px){ .wrap{padding:0 16px;} }
+            --border: rgba(96, 165, 250, 0.18);
+            --border-bright: rgba(56, 189, 248, 0.4);
 
-  /* ---------------- Header ---------------- */
-  header.top{padding:26px 0 0;}
-  .top-row{
-    display:flex; align-items:center; justify-content:space-between; gap:16px;
-    flex-wrap:wrap;
-    padding-bottom:22px;
-    border-bottom:1px solid var(--line-soft);
-  }
-  .brand{display:flex; align-items:center; gap:12px; min-width:0;}
-  .brand-mark{width:32px; height:32px; flex:none;}
-  .brand-word{font-family:var(--serif); font-size:19px; font-weight:600; letter-spacing:0.01em;}
-  .brand-tag{font-size:11px; color:var(--text-faint); font-family:var(--mono); margin-top:1px; letter-spacing:0.03em;}
-  .top-right{display:flex; align-items:center; gap:20px;}
-  nav.top-links{display:flex; gap:24px; font-size:13.5px; color:var(--text-muted);}
-  @media (max-width:860px){ nav.top-links{display:none;} }
+            --text-primary: #f1f7ff;
+            --text-secondary: #9db2c7;
+            --text-muted: #6f879c;
 
-  .lang-toggle{
-    display:flex; align-items:center; gap:0;
-    border:1px solid var(--line); border-radius:999px; overflow:hidden;
-    flex:none;
-  }
-  .lang-toggle button{
-    font-family:var(--mono); font-size:11px; letter-spacing:0.04em;
-    background:transparent; border:none; color:var(--text-faint);
-    padding:6px 12px; cursor:pointer; transition:background .15s ease, color .15s ease;
-  }
-  .lang-toggle button[aria-pressed="true"]{background:var(--brass-soft); color:var(--brass);}
-  .lang-toggle button:not([aria-pressed="true"]):hover{color:var(--text);}
-  .lang-toggle button + button{border-left:1px solid var(--line);}
+            --cyan: #22d3ee;
+            --blue: #38bdf8;
+            --green: #34d399;
+            --yellow: #fbbf24;
+            --red: #fb7185;
 
-  /* ---------------- Hero ---------------- */
-  .hero{
-    padding:52px 0 36px;
-    max-width:680px;
-    margin:0 auto;
-    text-align:center;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-  }
-  .hero h1{
-    font-family:var(--serif);
-    font-weight:500;
-    font-size:clamp(30px, 4.4vw, 46px);
-    line-height:1.14;
-    margin:0 0 18px;
-  }
-  .hero p{font-size:16px; color:var(--text-muted); margin:0 auto; max-width:52ch;}
+            --shadow:
+                0 20px 60px rgba(0, 0, 0, 0.35);
+        }
 
-  /* ---------------- Two-pane layout ---------------- */
-  .console-shell{
-    display:grid;
-    grid-template-columns: 400px 1fr;
-    gap:22px;
-    align-items:start;
-    padding-bottom:64px;
-    max-width:980px;
-    margin:0 auto;
-  }
-  @media (max-width:920px){
-    .console-shell{grid-template-columns:1fr; max-width:560px;}
-  }
+        body {
+            min-height: 100vh;
+            font-family:
+                Inter,
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
 
-  .console{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:var(--radius-md);
-    padding:24px;
-    backdrop-filter:blur(6px);
-    position:sticky;
-    top:20px;
-  }
-  @media (max-width:920px){ .console{position:static;} }
+            color: var(--text-primary);
 
-  .console-label{
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--brass);
-    letter-spacing:0.06em;
-    margin-bottom:16px;
-    padding-bottom:12px;
-    border-bottom:1px solid var(--line-soft);
-  }
+            background:
+                radial-gradient(
+                    circle at 15% 10%,
+                    rgba(14, 165, 233, 0.12),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at 85% 20%,
+                    rgba(34, 211, 238, 0.08),
+                    transparent 28%
+                ),
+                linear-gradient(
+                    135deg,
+                    #040c15 0%,
+                    #06111d 45%,
+                    #081827 100%
+                );
 
-  .coord-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;}
-  .field{display:flex; flex-direction:column; gap:6px;}
-  .field label{font-size:12.5px; color:var(--text-muted);}
-  .field input, .field textarea{
-    background:rgba(6,22,34,0.55);
-    border:1px solid var(--line);
-    border-radius:var(--radius-sm);
-    color:var(--text);
-    font-family:var(--mono);
-    font-size:14px;
-    padding:10px 12px;
-    width:100%;
-  }
-  .field input:hover, .field textarea:hover{border-color:rgba(234,242,246,0.2);}
-  .field input[aria-invalid="true"]{border-color:var(--severe);}
-  .field textarea{
-    font-family:var(--sans);
-    font-size:14.5px;
-    resize:vertical;
-    min-height:64px;
-  }
-  .field input::placeholder, .field textarea::placeholder{color:var(--text-faint);}
+            overflow-x: hidden;
+        }
 
-  .geo-row{display:flex; justify-content:flex-end; margin-bottom:12px;}
-  .link-btn{
-    background:none; border:none; padding:0; cursor:pointer;
-    font-family:var(--mono); font-size:11.5px; color:var(--text-faint);
-    display:inline-flex; align-items:center; gap:5px;
-  }
-  .link-btn:hover{color:var(--brass);}
-  .link-btn svg{width:12px; height:12px;}
+        /* =========================
+           BACKGROUND EFFECT
+        ========================== */
 
-  .presets{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
-  .chip{
-    font-family:var(--mono);
-    font-size:12px;
-    padding:6px 11px;
-    border-radius:999px;
-    border:1px solid var(--line);
-    background:transparent;
-    color:var(--text-muted);
-    cursor:pointer;
-    transition:border-color .15s ease, color .15s ease, background .15s ease;
-  }
-  .chip:hover{border-color:var(--brass); color:var(--text);}
-  .chip[aria-pressed="true"]{border-color:var(--brass); color:var(--brass); background:var(--brass-soft);}
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
 
-  .run-btn{
-    width:100%;
-    font-family:var(--sans);
-    font-weight:600;
-    font-size:14.5px;
-    color:#06141f;
-    background:linear-gradient(135deg, #d8b579, var(--brass));
-    border:none;
-    border-radius:var(--radius-sm);
-    padding:13px 20px;
-    cursor:pointer;
-    transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-    box-shadow:0 4px 14px rgba(201,161,90,0.16);
-  }
-  .run-btn:hover:not(:disabled){transform:translateY(-1px); box-shadow:0 6px 18px rgba(201,161,90,0.26);}
-  .run-btn:disabled{opacity:0.55; cursor:progress; transform:none;}
-  .console-hint{font-size:12px; color:var(--text-faint); margin-top:10px; text-align:center;}
+            pointer-events: none;
 
-  .progress-block{display:none; margin-top:16px;}
-  .progress-block.show{display:block;}
-  .progress-head{
-    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
-    font-family:var(--mono); font-size:11.5px; color:var(--brass); margin-bottom:8px;
-  }
-  .progress-head .elapsed{color:var(--text-faint);}
-  .progress-track{height:3px; border-radius:2px; background:rgba(234,242,246,0.09); overflow:hidden;}
-  .progress-fill{
-    height:100%; width:0%; border-radius:2px;
-    background:linear-gradient(90deg, #d8b579, var(--brass));
-    transition:width .4s ease;
-  }
-  .progress-note{font-family:var(--mono); font-size:11px; color:var(--text-faint); margin-top:8px;}
+            background-image:
+                linear-gradient(
+                    rgba(255,255,255,0.015) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.015) 1px,
+                    transparent 1px
+                );
 
-  /* ---------------- Pipeline flow diagram ---------------- */
-  .flow-section{display:none; padding:6px 0 44px;}
-  .flow-section.show{display:block;}
-  .flow-caption{
-    font-family:var(--mono); font-size:11px; color:var(--brass);
-    letter-spacing:0.08em; text-align:center; margin-bottom:24px;
-    text-transform:uppercase;
-  }
+            background-size: 50px 50px;
 
-  .flow-diagram{display:flex; flex-direction:column; align-items:center; min-width:0;}
-  .flow-stem{width:1px; height:22px; background:var(--line); flex:none;}
+            mask-image: linear-gradient(
+                to bottom,
+                black,
+                transparent
+            );
+        }
 
-  .flow-node{
-    position:relative;
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:var(--radius-md);
-    padding:14px 8px 12px;
-    text-align:center;
-    flex:none;
-    transition:border-color .35s ease, background .35s ease, opacity .35s ease;
-  }
-  /* display:block matters — .flow-icon is a <span>, and width/height
-     are ignored on an inline box, which rendered the icons oversized. */
-  .flow-node .flow-icon{
-    display:block;
-    width:22px; height:22px; margin:0 auto 8px;
-    color:var(--text-faint);
-    transition:color .35s ease;
-  }
-  .flow-node .flow-icon svg{width:100%; height:100%; display:block;}
-  .flow-node .flow-label{display:block; font-family:var(--sans); font-weight:600; font-size:12.5px; color:var(--text-muted); line-height:1.3; transition:color .35s ease;}
-  .flow-node .flow-label .hi{font-weight:400; font-size:0.86em; margin-top:2px; color:var(--text-faint);}
-  .flow-node .flow-status{
-    font-family:var(--mono); font-size:9px; letter-spacing:0.07em;
-    color:var(--text-faint); margin-top:6px; text-transform:uppercase;
-    display:block; min-height:12px;
-  }
-  .flow-node .flow-status .hi{display:block; margin-top:2px; letter-spacing:0; text-transform:none; font-size:1.05em;}
-  body.lang-en .flow-node .flow-status .hi{display:none;}
+        /* =========================
+           HEADER
+        ========================== */
 
-  .flow-node.status-active{border-color:var(--brass); background:var(--brass-soft); box-shadow:0 0 0 3px var(--brass-soft);}
-  .flow-node.status-active .flow-icon{color:var(--brass); animation:pulse 1.3s ease-in-out infinite;}
-  .flow-node.status-active .flow-label{color:var(--text);}
-  .flow-node.status-active .flow-status{color:var(--brass);}
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
 
-  .flow-node.status-done{border-color:rgba(95,185,139,0.4); background:rgba(95,185,139,0.06);}
-  .flow-node.status-done .flow-icon{color:var(--low);}
-  .flow-node.status-done .flow-label{color:var(--text);}
-  .flow-node.status-done .flow-status{color:var(--low);}
+            height: 74px;
 
-  .flow-node.status-partial{border-color:rgba(201,161,90,0.45); background:rgba(201,161,90,0.06);}
-  .flow-node.status-partial .flow-icon{color:var(--moderate);}
-  .flow-node.status-partial .flow-label{color:var(--text);}
-  .flow-node.status-partial .flow-status{color:var(--moderate);}
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
 
-  .flow-node.status-failed{border-color:rgba(217,86,79,0.45); background:rgba(217,86,79,0.06);}
-  .flow-node.status-failed .flow-icon{color:var(--severe);}
-  .flow-node.status-failed .flow-label{color:var(--text);}
-  .flow-node.status-failed .flow-status{color:#f4b3ae;}
+            padding: 0 34px;
 
-  .flow-node.status-skipped{opacity:0.32;}
-  .flow-node.status-pending{opacity:0.6;}
+            background:
+                rgba(4, 13, 23, 0.86);
 
-  .flow-planner{width:158px;}
-  .flow-final{width:190px;}
+            backdrop-filter: blur(18px);
 
-  /* min-width:0 + align-self:stretch are load-bearing: .flow-diagram is
-     a column flexbox, and a flex item's default min-width:auto let the
-     wide agent row push the whole page into horizontal scroll on
-     narrow screens instead of scrolling inside this box. */
-  .flow-row-outer{
-    width:100%; max-width:100%; min-width:0; align-self:stretch;
-    overflow-x:auto; padding-bottom:4px;
-  }
-  .flow-row-wrap{position:relative; margin:0 auto; width:max-content; min-width:min-content;}
-  @media (max-width:920px){ .flow-row-wrap{margin:0;} }
-  .flow-bus{position:absolute; top:0; left:48px; right:48px; height:1px; background:var(--line);}
-  /* stretch keeps every specialist card the same height even when one
-     label wraps to two lines */
-  .flow-columns{display:flex; gap:10px; padding-top:22px; align-items:stretch;}
-  .flow-column{display:flex; flex-direction:column; align-items:center; width:96px;}
-  .flow-column .flow-node{width:96px; flex:1 1 auto;}
+            border-bottom:
+                1px solid rgba(148, 163, 184, 0.12);
+        }
 
-  @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
 
-  /* ---------------- Results ---------------- */
-  .results-col{min-height:220px;}
+        .brand-logo {
+            width: 42px;
+            height: 42px;
 
-  .placeholder{
-    border:1px dashed var(--line);
-    border-radius:var(--radius-md);
-    padding:48px 24px;
-    text-align:center;
-    color:var(--text-faint);
-    font-size:14.5px;
-    height:100%;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-  }
-  .placeholder strong{display:block; color:var(--text-muted); font-family:var(--serif); font-size:19px; font-weight:500; margin-bottom:8px;}
+            display: flex;
+            align-items: center;
+            justify-content: center;
 
-  .results{display:none;}
-  .results.show{display:block;}
+            border-radius: 13px;
 
-  .risk-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
-  @media (max-width:560px){ .risk-row{grid-template-columns:1fr;} }
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(34, 211, 238, 0.18),
+                    rgba(37, 99, 235, 0.18)
+                );
 
-  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 20px;}
-  .panel-eyebrow{font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-bottom:10px; letter-spacing:0.04em;}
-  .risk-panel{position:relative; overflow:hidden;}
-  .risk-panel::before{
-    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
-    background:var(--risk-color, var(--unknown));
-  }
-  .risk-value{font-family:var(--serif); font-size:32px; font-weight:600; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;}
-  .risk-dot{width:10px; height:10px; border-radius:50%; margin-bottom:4px; flex:none; background:var(--risk-color, var(--unknown));}
-  .risk-value small{font-family:var(--sans); font-size:12.5px; color:var(--text-faint); font-weight:400;}
+            border:
+                1px solid rgba(34, 211, 238, 0.3);
 
-  .loc-value{font-family:var(--mono); font-size:15px; color:var(--text);}
-  .loc-sub{font-size:12.5px; color:var(--text-faint); margin-top:4px;}
+            box-shadow:
+                0 0 30px rgba(34, 211, 238, 0.12);
 
-  .assessment-panel{margin-bottom:14px;}
-  .assessment-panel p{margin:0; font-size:15.5px; color:var(--text); line-height:1.65;}
+            font-size: 21px;
+        }
 
-  .rec-banner{
-    border-radius:var(--radius-md); padding:17px 19px; margin-bottom:14px;
-    border:1px solid rgba(95,185,139,0.32);
-    background:rgba(95,185,139,0.07);
-    color:#d7f2e4; font-size:15px; line-height:1.55;
-  }
-  .rec-banner .panel-eyebrow{color:#8fd0ab;}
+        .brand-text h1 {
+            font-size: 17px;
+            font-weight: 750;
+            letter-spacing: 0.3px;
+        }
 
-  .notice{
-    border-radius:var(--radius-md); padding:16px 19px; margin-bottom:14px;
-    border:1px solid rgba(201,161,90,0.35);
-    background:rgba(201,161,90,0.07);
-    color:#f0dcb6; font-size:14.5px; line-height:1.55;
-    display:none;
-  }
-  .notice.show{display:block;}
-  .notice .panel-eyebrow{color:var(--brass);}
+        .brand-text span {
+            display: block;
 
-  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
-  @media (max-width:560px){ .two-col{grid-template-columns:1fr;} }
+            margin-top: 2px;
 
-  .list-panel ul{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px;}
-  .list-panel li{font-size:13.5px; line-height:1.5; padding-left:15px; position:relative; color:var(--text);}
-  .list-panel li::before{content:""; position:absolute; left:0; top:6px; width:5px; height:5px; border-radius:50%; background:var(--brass);}
-  .list-panel.advice li::before{background:var(--coral);}
+            font-size: 10px;
+            color: var(--text-muted);
 
-  .results-actions{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
-  .ghost-btn{
-    font-family:var(--mono); font-size:11.5px; letter-spacing:0.03em;
-    background:transparent; border:1px solid var(--line); color:var(--text-muted);
-    padding:8px 14px; border-radius:var(--radius-sm); cursor:pointer;
-    transition:border-color .15s ease, color .15s ease;
-  }
-  .ghost-btn:hover{border-color:var(--brass); color:var(--text);}
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+        }
 
-  /* ---------------- Agent readout ---------------- */
-  .readout{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 18px;}
-  .readout > summary{cursor:pointer; font-family:var(--mono); font-size:11.5px; color:var(--text-muted); letter-spacing:0.02em;}
-  .readout > summary::marker{color:var(--text-faint);}
-  .agent-list{display:flex; flex-direction:column; gap:8px; margin-top:14px;}
-  .agent-card{border:1px solid var(--line-soft); border-radius:var(--radius-sm); background:rgba(6,22,34,0.35);}
-  .agent-card > summary{
-    cursor:pointer; padding:10px 12px; display:flex; align-items:center; gap:10px;
-    font-family:var(--sans); font-size:13px; color:var(--text); list-style:none;
-  }
-  .agent-card > summary::-webkit-details-marker{display:none;}
-  .agent-card > summary::before{
-    content:"▸"; color:var(--text-faint); font-size:11px; transition:transform .15s ease;
-  }
-  .agent-card[open] > summary::before{content:"▾";}
-  .agent-name{flex:1; min-width:0;}
-  .pill{
-    font-family:var(--mono); font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase;
-    padding:3px 8px; border-radius:999px; border:1px solid currentColor; flex:none;
-  }
-  .pill.ok{color:var(--low);}
-  .pill.partial{color:var(--moderate);}
-  .pill.fail{color:#f4b3ae;}
-  .pill.muted{color:var(--text-faint);}
-  .agent-card pre{
-    margin:0; padding:0 12px 12px;
-    font-family:var(--mono); font-size:11px; color:var(--text-muted);
-    white-space:pre-wrap; word-break:break-word; max-height:280px; overflow:auto;
-  }
-  .readout .empty{font-family:var(--mono); font-size:11.5px; color:var(--text-faint); margin-top:12px;}
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
 
-  /* ---------------- Fault panel ---------------- */
-  .fault-panel{
-    border:1px solid rgba(217,86,79,0.4);
-    background:rgba(217,86,79,0.07);
-    border-radius:var(--radius-md);
-    padding:18px 20px;
-    display:none;
-  }
-  .fault-panel.show{display:block;}
-  .fault-head{display:flex; align-items:center; gap:9px; margin-bottom:8px;}
-  .fault-dot{width:8px; height:8px; border-radius:50%; background:var(--severe); flex:none;}
-  .fault-title{font-family:var(--mono); font-size:12px; color:#f4b3ae; letter-spacing:0.03em;}
-  .fault-body{font-size:14px; color:#f4c9c6; line-height:1.55;}
-  .fault-retry{
-    margin-top:12px;
-    font-family:var(--mono); font-size:12px;
-    background:transparent; border:1px solid rgba(217,86,79,0.4);
-    color:#f4c9c6; padding:8px 14px; border-radius:var(--radius-sm); cursor:pointer;
-  }
-  .fault-retry:hover{border-color:#f4c9c6;}
+            padding: 8px 13px;
 
-  footer{
-    margin:20px auto 40px; padding-top:20px; border-top:1px solid var(--line-soft);
-    font-size:12px; color:var(--text-faint);
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
-    max-width:980px;
-  }
+            border-radius: 999px;
 
-  @media (prefers-reduced-motion: reduce){
-    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
-    html{scroll-behavior:auto;}
-  }
-</style>
+            background:
+                rgba(52, 211, 153, 0.07);
+
+            border:
+                1px solid rgba(52, 211, 153, 0.2);
+
+            color: #8ff0c6;
+
+            font-size: 11px;
+            font-weight: 650;
+
+            letter-spacing: 0.5px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+
+            border-radius: 50%;
+
+            background: var(--green);
+
+            box-shadow:
+                0 0 10px rgba(52, 211, 153, 0.8);
+
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.45;
+            }
+        }
+
+        /* =========================
+           MAIN
+        ========================== */
+
+        main {
+            width: min(1450px, calc(100% - 42px));
+            margin: 0 auto;
+
+            padding: 45px 0 70px;
+        }
+
+        /* =========================
+           HERO
+        ========================== */
+
+        .hero {
+            margin-bottom: 30px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+
+            padding: 8px 13px;
+
+            border-radius: 999px;
+
+            color: #8defff;
+
+            background:
+                rgba(34, 211, 238, 0.06);
+
+            border:
+                1px solid rgba(34, 211, 238, 0.17);
+
+            font-size: 10px;
+            font-weight: 700;
+
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+        }
+
+        .hero-title {
+            margin-top: 17px;
+
+            font-size: clamp(36px, 5vw, 65px);
+            line-height: 1.03;
+
+            font-weight: 800;
+
+            letter-spacing: -2.5px;
+
+            background:
+                linear-gradient(
+                    120deg,
+                    #ffffff 10%,
+                    #b8eaff 45%,
+                    #67e8f9 90%
+                );
+
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero-subtitle {
+            max-width: 750px;
+
+            margin-top: 15px;
+
+            color: var(--text-secondary);
+
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        /* =========================
+           GRID
+        ========================== */
+
+        .dashboard-grid {
+            display: grid;
+
+            grid-template-columns:
+                minmax(330px, 420px)
+                minmax(0, 1fr);
+
+            gap: 20px;
+
+            align-items: start;
+        }
+
+        /* =========================
+           CARDS
+        ========================== */
+
+        .card {
+            background:
+                linear-gradient(
+                    145deg,
+                    rgba(14, 33, 51, 0.9),
+                    rgba(7, 21, 34, 0.88)
+                );
+
+            border:
+                1px solid var(--border);
+
+            border-radius: 20px;
+
+            box-shadow: var(--shadow);
+
+            overflow: hidden;
+
+            backdrop-filter: blur(15px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            padding: 19px 20px;
+
+            border-bottom:
+                1px solid rgba(148, 163, 184, 0.09);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 9px;
+
+            background:
+                rgba(34, 211, 238, 0.08);
+
+            border:
+                1px solid rgba(34, 211, 238, 0.15);
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* =========================
+           FORM
+        ========================== */
+
+        .form-group {
+            margin-bottom: 17px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+
+            margin-bottom: 7px;
+
+            color: #b6c8d9;
+
+            font-size: 11px;
+            font-weight: 650;
+
+            letter-spacing: 0.3px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+
+            padding: 12px 13px;
+
+            color: var(--text-primary);
+
+            background:
+                rgba(3, 13, 23, 0.7);
+
+            border:
+                1px solid rgba(148, 163, 184, 0.16);
+
+            border-radius: 10px;
+
+            outline: none;
+
+            font-family: inherit;
+            font-size: 13px;
+
+            transition:
+                border-color 0.2s ease,
+                box-shadow 0.2s ease,
+                background 0.2s ease;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: #50677c;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color:
+                rgba(34, 211, 238, 0.55);
+
+            box-shadow:
+                0 0 0 3px rgba(34, 211, 238, 0.07);
+
+            background:
+                rgba(3, 17, 29, 0.85);
+        }
+
+        select option {
+            background: #081522;
+            color: white;
+        }
+
+        .coordinate-grid {
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            gap: 10px;
+        }
+
+        /* =========================
+           MAP
+        ========================== */
+
+        .map-wrapper {
+            position: relative;
+
+            height: 410px;
+
+            border-radius: 16px;
+
+            overflow: hidden;
+
+            border:
+                1px solid rgba(96, 165, 250, 0.18);
+
+            background: #071522;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-overlay {
+            position: absolute;
+
+            top: 14px;
+            left: 14px;
+
+            z-index: 500;
+
+            padding: 9px 12px;
+
+            border-radius: 10px;
+
+            background:
+                rgba(3, 13, 23, 0.88);
+
+            border:
+                1px solid rgba(148, 163, 184, 0.15);
+
+            backdrop-filter: blur(10px);
+
+            color: #d7e7f5;
+
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .map-coordinates {
+            position: absolute;
+
+            left: 14px;
+            bottom: 14px;
+
+            z-index: 500;
+
+            padding: 9px 12px;
+
+            border-radius: 10px;
+
+            background:
+                rgba(3, 13, 23, 0.88);
+
+            border:
+                1px solid rgba(34, 211, 238, 0.15);
+
+            backdrop-filter: blur(10px);
+
+            color: #8defff;
+
+            font-family:
+                ui-monospace,
+                SFMono-Regular,
+                Menlo,
+                Monaco,
+                Consolas,
+                monospace;
+
+            font-size: 10px;
+        }
+
+        /* =========================
+           LEAFLET OVERRIDES
+        ========================== */
+
+        .leaflet-container {
+            background: #071522;
+            font-family: inherit;
+        }
+
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        .leaflet-control-zoom a {
+            background:
+                rgba(5, 18, 30, 0.9) !important;
+
+            color: #bceeff !important;
+
+            border:
+                1px solid rgba(148, 163, 184, 0.15) !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background:
+                rgba(14, 42, 61, 0.95) !important;
+        }
+
+        .leaflet-popup-content-wrapper,
+        .leaflet-popup-tip {
+            background: #091a2a;
+            color: #e7f4ff;
+
+            border:
+                1px solid rgba(34, 211, 238, 0.2);
+        }
+
+        .leaflet-popup-content {
+            font-size: 12px;
+        }
+
+        /* =========================
+           BUTTONS
+        ========================== */
+
+        .button-row {
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            gap: 10px;
+
+            margin-top: 18px;
+        }
+
+        button {
+            border: none;
+            outline: none;
+
+            cursor: pointer;
+
+            font-family: inherit;
+
+            transition:
+                transform 0.15s ease,
+                box-shadow 0.2s ease,
+                opacity 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            min-height: 46px;
+
+            border-radius: 11px;
+
+            color: #03121b;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #67e8f9,
+                    #38bdf8
+                );
+
+            font-size: 12px;
+            font-weight: 800;
+
+            letter-spacing: 0.4px;
+
+            box-shadow:
+                0 8px 25px rgba(34, 211, 238, 0.14);
+        }
+
+        .btn-primary:hover {
+            box-shadow:
+                0 12px 35px rgba(34, 211, 238, 0.25);
+        }
+
+        .btn-secondary {
+            min-height: 46px;
+
+            border-radius: 11px;
+
+            color: #c5d8e9;
+
+            background:
+                rgba(148, 163, 184, 0.06);
+
+            border:
+                1px solid rgba(148, 163, 184, 0.16);
+
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .btn-secondary:hover {
+            background:
+                rgba(148, 163, 184, 0.11);
+        }
+
+        .btn-location {
+            width: 100%;
+
+            margin-top: 10px;
+
+            padding: 10px;
+
+            border-radius: 9px;
+
+            color: #8defff;
+
+            background:
+                rgba(34, 211, 238, 0.06);
+
+            border:
+                1px solid rgba(34, 211, 238, 0.14);
+
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* =========================
+           MAP PANEL
+        ========================== */
+
+        .map-card .card-body {
+            padding: 14px;
+        }
+
+        /* =========================
+           RESULTS
+        ========================== */
+
+        .results-section {
+            margin-top: 20px;
+        }
+
+        .results-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, minmax(0, 1fr));
+
+            gap: 12px;
+
+            padding: 18px;
+        }
+
+        .metric {
+            min-height: 105px;
+
+            padding: 15px;
+
+            border-radius: 13px;
+
+            background:
+                rgba(3, 14, 24, 0.55);
+
+            border:
+                1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .metric-label {
+            color: var(--text-muted);
+
+            font-size: 10px;
+            font-weight: 650;
+
+            text-transform: uppercase;
+
+            letter-spacing: 0.9px;
+        }
+
+        .metric-value {
+            margin-top: 10px;
+
+            font-size: 24px;
+            font-weight: 800;
+
+            color: #e9f7ff;
+        }
+
+        .metric-description {
+            margin-top: 4px;
+
+            color: #6f879c;
+
+            font-size: 10px;
+        }
+
+        /* =========================
+           OUTPUT
+        ========================== */
+
+        .output-container {
+            margin: 0 18px 18px;
+
+            min-height: 180px;
+
+            padding: 17px;
+
+            border-radius: 13px;
+
+            background:
+                rgba(2, 10, 18, 0.7);
+
+            border:
+                1px solid rgba(148, 163, 184, 0.1);
+
+            overflow: auto;
+        }
+
+        .output-container pre {
+            margin: 0;
+
+            color: #b9d4e7;
+
+            white-space: pre-wrap;
+            word-break: break-word;
+
+            font-family:
+                ui-monospace,
+                SFMono-Regular,
+                Menlo,
+                Monaco,
+                Consolas,
+                monospace;
+
+            font-size: 11px;
+
+            line-height: 1.65;
+        }
+
+        .empty-state {
+            min-height: 140px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            text-align: center;
+
+            color: #5e7487;
+
+            font-size: 12px;
+        }
+
+        /* =========================
+           LOADING
+        ========================== */
+
+        .loading {
+            display: none;
+
+            align-items: center;
+            justify-content: center;
+
+            gap: 10px;
+
+            padding: 18px;
+
+            color: #9bdff1;
+
+            font-size: 12px;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .loader {
+            width: 17px;
+            height: 17px;
+
+            border-radius: 50%;
+
+            border:
+                2px solid rgba(34, 211, 238, 0.15);
+
+            border-top-color:
+                var(--cyan);
+
+            animation:
+                spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* =========================
+           ALERT
+        ========================== */
+
+        .alert {
+            display: none;
+
+            margin: 0 18px 18px;
+
+            padding: 13px 15px;
+
+            border-radius: 11px;
+
+            font-size: 11px;
+
+            line-height: 1.5;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert.error {
+            color: #fecdd3;
+
+            background:
+                rgba(244, 63, 94, 0.07);
+
+            border:
+                1px solid rgba(244, 63, 94, 0.2);
+        }
+
+        .alert.success {
+            color: #bbf7d0;
+
+            background:
+                rgba(34, 197, 94, 0.07);
+
+            border:
+                1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        /* =========================
+           FOOTER
+        ========================== */
+
+        footer {
+            margin-top: 35px;
+
+            padding-top: 18px;
+
+            border-top:
+                1px solid rgba(148, 163, 184, 0.08);
+
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+
+            color: #536a7d;
+
+            font-size: 10px;
+        }
+
+        /* =========================
+           RESPONSIVE
+        ========================== */
+
+        @media (max-width: 1000px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .results-grid {
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 650px) {
+            header {
+                padding: 0 16px;
+            }
+
+            .system-status {
+                display: none;
+            }
+
+            main {
+                width: min(
+                    100% - 24px,
+                    1450px
+                );
+
+                padding-top: 28px;
+            }
+
+            .hero-title {
+                font-size: 39px;
+                letter-spacing: -1.5px;
+            }
+
+            .map-wrapper {
+                height: 340px;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .button-row {
+                grid-template-columns: 1fr;
+            }
+
+            footer {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
-<body class="lang-both">
 
-<div class="wrap">
+<body>
 
-  <header class="top">
-    <div class="top-row">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <circle cx="17" cy="17" r="16" stroke="#c9a15a" stroke-width="1.2"/>
-          <path d="M6 18c3-4 6-4 9 0s6 4 9 0" stroke="#eaf2f6" stroke-width="1.3" stroke-linecap="round"/>
-          <path d="M6 22c3-4 6-4 9 0s6 4 9 0" stroke="#c9a15a" stroke-width="1.3" stroke-linecap="round" opacity="0.6"/>
-          <circle cx="17" cy="10.5" r="1.6" fill="#c9a15a"/>
-        </svg>
-        <div>
-          <div class="brand-word">SAMUDRA</div>
-          <div class="brand-tag">Marine conditions intelligence<span class="hi">समुद्री स्थिति सूचना</span></div>
-        </div>
-      </div>
+    <!-- =========================
+         HEADER
+    ========================== -->
 
-      <div class="top-right">
-        <nav class="top-links" aria-label="Data sources">
-          <span>Weather<span class="hi">मौसम</span></span>
-          <span>Sea state<span class="hi">समुद्री स्थिति</span></span>
-          <span>Tides<span class="hi">ज्वार-भाटा</span></span>
-          <span>Hazards<span class="hi">खतरे</span></span>
-        </nav>
-        <div class="lang-toggle" role="group" aria-label="Language">
-          <button type="button" id="langBoth" aria-pressed="true">EN + हिं</button>
-          <button type="button" id="langEn" aria-pressed="false">EN</button>
-        </div>
-      </div>
-    </div>
-  </header>
+    <header>
 
-  <main>
+        <div class="brand">
 
-    <section class="hero">
-      <h1>Know the water before you go.<span class="hi">जाने से पहले समुद्र को जानें</span></h1>
-      <p>Ask a plain question about a coastal spot. Samudra checks live wind, wave, tide, cyclone and coastal data and returns one clear assessment, with the numbers behind it.<span class="hi">किसी तटीय स्थान के बारे में सीधा सवाल पूछें। Samudra हवा, लहर, ज्वार, चक्रवात और तट से जुड़ा लाइव डेटा जांचकर एक स्पष्ट आकलन देता है।</span></p>
-    </section>
-
-    <section class="flow-section" id="flowSection" aria-label="Pipeline progress">
-      <div class="flow-caption">Parallel pipeline execution<span class="hi hi-inline" style="text-transform:none;"> / समानांतर प्रक्रिया</span></div>
-      <div class="flow-diagram" id="flowDiagram"></div>
-    </section>
-
-    <div class="console-shell">
-
-      <section class="console" id="console" aria-label="Assessment input">
-        <div class="console-label">Target location &amp; question<span class="hi">स्थान और प्रश्न</span></div>
-
-        <div class="coord-row">
-          <div class="field">
-            <label for="lat">Latitude<span class="hi">अक्षांश</span></label>
-            <input id="lat" type="number" step="0.0001" min="-90" max="90" value="19.0760" placeholder="19.0760" inputmode="decimal" />
-          </div>
-          <div class="field">
-            <label for="lon">Longitude<span class="hi">देशांतर</span></label>
-            <input id="lon" type="number" step="0.0001" min="-180" max="180" value="72.8777" placeholder="72.8777" inputmode="decimal" />
-          </div>
-        </div>
-
-        <div class="geo-row">
-          <button type="button" class="link-btn" id="geoBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
-            Use my location
-          </button>
-        </div>
-
-        <div class="presets" id="presets" role="group" aria-label="Preset locations">
-          <button type="button" class="chip" aria-pressed="false" data-lat="19.0760" data-lon="72.8777">Mumbai</button>
-          <button type="button" class="chip" aria-pressed="false" data-lat="13.0827" data-lon="80.2707">Chennai</button>
-          <button type="button" class="chip" aria-pressed="false" data-lat="9.9312" data-lon="76.2673">Kochi</button>
-          <button type="button" class="chip" aria-pressed="false" data-lat="17.6868" data-lon="83.2185">Visakhapatnam</button>
-          <button type="button" class="chip" aria-pressed="false" data-lat="15.4909" data-lon="73.8278">Goa</button>
-          <button type="button" class="chip" aria-pressed="false" data-lat="8.0883" data-lon="77.5385">Kanyakumari</button>
-        </div>
-
-        <div class="field" style="margin-bottom:18px;">
-          <label for="question">Your question<span class="hi">आपका प्रश्न</span></label>
-          <textarea id="question" maxlength="600" placeholder="e.g. Is it safe to take the boat out tomorrow morning? / जैसे: क्या कल सुबह नाव ले जाना सुरक्षित है?">Is it safe to venture into the sea tomorrow morning?</textarea>
-        </div>
-
-        <button class="run-btn" id="runBtn" type="button"></button>
-        <div class="console-hint">Typically 15&ndash;40s &mdash; Samudra calls live marine data sources<span class="hi">आमतौर पर 15&ndash;40 सेकंड लगते हैं</span></div>
-
-        <div class="progress-block" id="progressBlock">
-          <div class="progress-head">
-            <span id="progressLabel">Starting&hellip;</span>
-            <span class="elapsed" id="elapsedLabel">0.0s</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-          <div class="progress-note" id="progressNote"></div>
-        </div>
-      </section>
-
-      <div class="results-col">
-
-        <div class="placeholder" id="placeholder">
-          <strong id="placeholderTitle">No assessment yet<span class="hi" style="font-size:0.55em; margin-top:6px;">अभी तक कोई आकलन नहीं</span></strong>
-          <span id="placeholderBody">Pick a location and ask a question to run a live marine check.<span class="hi">कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।</span></span>
-        </div>
-
-        <div class="fault-panel" id="faultPanel" role="alert">
-          <div class="fault-head">
-            <span class="fault-dot"></span>
-            <span class="fault-title" id="faultTitle">NO SIGNAL</span>
-          </div>
-          <div class="fault-body" id="faultBody"></div>
-          <button class="fault-retry" id="faultRetry" type="button">Try again<span class="hi hi-inline"> / फिर कोशिश करें</span></button>
-        </div>
-
-        <section class="results" id="results" aria-live="polite" aria-atomic="false">
-
-          <div class="notice" id="rejectNotice">
-            <div class="panel-eyebrow" id="rejectTitle">Out of scope<span class="hi">दायरे से बाहर</span></div>
-            <div id="rejectText"></div>
-          </div>
-
-          <div class="risk-row">
-            <div class="panel risk-panel" id="riskPanel">
-              <div class="panel-eyebrow">Overall risk<span class="hi">समग्र जोखिम</span></div>
-              <div class="risk-value">
-                <span class="risk-dot" id="riskDot"></span>
-                <span id="riskText">&mdash;</span>
-                <small id="riskActivity"></small>
-              </div>
+            <div class="brand-logo">
+                🌊
             </div>
-            <div class="panel">
-              <div class="panel-eyebrow">Location &amp; time<span class="hi">स्थान और समय</span></div>
-              <div class="loc-value" id="locValue">&mdash;</div>
-              <div class="loc-sub" id="locSub">&mdash;</div>
+
+            <div class="brand-text">
+                <h1>ORCA Marine Intelligence</h1>
+                <span>Agentic Ocean Intelligence</span>
             </div>
-          </div>
 
-          <div class="panel assessment-panel">
-            <div class="panel-eyebrow">Assessment<span class="hi">आकलन</span></div>
-            <p id="summaryText">&mdash;</p>
-          </div>
+        </div>
 
-          <div class="rec-banner" id="recBanner">
-            <div class="panel-eyebrow">Recommendation<span class="hi">सिफारिश</span></div>
-            <div id="recText">&mdash;</div>
-          </div>
+        <div class="system-status">
+            <span class="status-dot"></span>
+            SYSTEM ONLINE
+        </div>
 
-          <div class="two-col">
-            <div class="panel list-panel" id="findingsPanel">
-              <div class="panel-eyebrow">Key findings<span class="hi">मुख्य निष्कर्ष</span></div>
-              <ul id="findingsList"></ul>
+    </header>
+
+
+    <!-- =========================
+         MAIN
+    ========================== -->
+
+    <main>
+
+        <!-- HERO -->
+
+        <section class="hero">
+
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                AI MARINE INTELLIGENCE SYSTEM
             </div>
-            <div class="panel list-panel advice" id="advicePanel">
-              <div class="panel-eyebrow">Safety advisory<span class="hi">सुरक्षा सलाह</span></div>
-              <ul id="adviceList"></ul>
+
+            <div class="hero-title">
+                ORCA Marine Intelligence
             </div>
-          </div>
 
-          <div class="results-actions">
-            <button class="ghost-btn" id="copyBtn" type="button">Copy assessment</button>
-            <button class="ghost-btn" id="jsonBtn" type="button">Download JSON</button>
-          </div>
-
-          <details class="readout" id="readout">
-            <summary>View full agent data (technical readout)<span class="hi hi-inline"> / पूरा तकनीकी डेटा देखें</span></summary>
-            <div class="agent-list" id="agentList"></div>
-          </details>
+            <div class="hero-subtitle">
+                Agentic AI platform for intelligent ocean,
+                weather, tide, cyclone and ecosystem analysis.
+                Select a location, provide your activity details,
+                and let ORCA coordinate the marine intelligence
+                pipeline.
+            </div>
 
         </section>
-      </div>
-
-    </div>
-  </main>
-
-  <footer>
-    <span>Samudra draws on open marine forecasts, tide stations and coastal registries. Always confirm with local authorities before departure.<span class="hi">Samudra खुले समुद्री पूर्वानुमान, ज्वार केंद्रों और तटीय रजिस्ट्री से जानकारी लेता है। रवाना होने से पहले हमेशा स्थानीय अधिकारियों से पुष्टि करें।</span></span>
-    <span>&copy; <span id="year"></span> Samudra</span>
-  </footer>
-
-</div>
-
-<script>
-(function () {
-  "use strict";
-
-  document.getElementById("year").textContent = new Date().getFullYear();
-
-  // ==========================================================
-  // Small helpers
-  // ==========================================================
-
-  const $ = (id) => document.getElementById(id);
-
-  function esc(value) {
-    return String(value == null ? "" : value)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-
-  /** English text plus an optional Devanagari line, as HTML. */
-  function bi(en, hi, inline) {
-    const cls = inline ? "hi hi-inline" : "hi";
-    return esc(en) + (hi ? `<span class="${cls}">${esc(hi)}</span>` : "");
-  }
-
-  /** Same, but on one line: "English / हिन्दी". */
-  function biSlash(en, hi) {
-    return esc(en) + (hi ? `<span class="hi hi-inline"> / ${esc(hi)}</span>` : "");
-  }
-
-  // ==========================================================
-  // Language toggle (in-memory only — no browser storage)
-  // ==========================================================
-
-  const langBoth = $("langBoth");
-  const langEn = $("langEn");
-
-  function setLanguage(mode) {
-    const enOnly = mode === "en";
-    document.body.classList.toggle("lang-en", enOnly);
-    document.body.classList.toggle("lang-both", !enOnly);
-    langEn.setAttribute("aria-pressed", String(enOnly));
-    langBoth.setAttribute("aria-pressed", String(!enOnly));
-  }
-
-  langEn.addEventListener("click", () => setLanguage("en"));
-  langBoth.addEventListener("click", () => setLanguage("both"));
-
-  // ==========================================================
-  // Pipeline topology
-  //
-  // Fetched from GET /api/graph so the diagram always matches
-  // graph.py. The literals below are only a fallback for when that
-  // request fails (offline preview, cold start).
-  // ==========================================================
-
-  const ICONS = {
-    planner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="19" r="1.8"/><circle cx="19" cy="5" r="1.8"/><path d="M6.3 17.7C7 12 10 10.5 12 9s3-3.3 5.7-3.7" stroke-dasharray="2.4 3"/></svg>',
-    gis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>',
-    weather: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.6"/><path d="M8 3.2v1.3M8 11.5v1.3M3.2 8h1.3M11.5 8h1.3M5 5l.9.9M10.1 10.1l.9.9M11 5l-.9.9M5.9 10.1l-.9.9"/><path d="M9.5 16h7.5a3.2 3.2 0 0 0 .3-6.4 4.8 4.8 0 0 0-9-1.7"/></svg>',
-    ocean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 15.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>',
-    tide: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 4.2a7.8 7.8 0 1 0 0 15.6 6.4 6.4 0 0 1 0-15.6Z"/></svg>',
-    cyclone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5a5 5 0 1 1-3.6 8.5"/><path d="M12 4.5a8 8 0 1 0 6 13.3"/></svg>',
-    ecosystem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5c7.5 0 13-5.5 15-15-9.5 0-15 5.5-15 15Z"/><path d="M6.5 17.5c3-4 6.5-7.5 11-9.5"/></svg>',
-    pfz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12c4-4.6 9.5-6.4 14.2-4.6-1 1.9-1 3.3 0 5.2-1 1.9-1 3.3 0 5.2-4.7 1.8-10.2 0-14.2-4.6Z"/><circle cx="7.2" cy="10.6" r="0.6" fill="currentColor" stroke="none"/></svg>',
-    recommendation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/></svg>',
-  };
-
-  const FALLBACK_TOPOLOGY = {
-    entry: "planner",
-    final: "recommendation",
-    specialists: ["gis", "weather", "ocean", "tide", "cyclone", "ecosystem", "pfz"],
-    nodes: [
-      { id: "planner", kind: "planner", label: "Planner", label_hi: "योजना" },
-      { id: "gis", kind: "specialist", label: "Coastal check", label_hi: "तटीय जांच" },
-      { id: "weather", kind: "specialist", label: "Weather", label_hi: "मौसम" },
-      { id: "ocean", kind: "specialist", label: "Sea state", label_hi: "समुद्री स्थिति" },
-      { id: "tide", kind: "specialist", label: "Tide", label_hi: "ज्वार-भाटा" },
-      { id: "cyclone", kind: "specialist", label: "Cyclone", label_hi: "चक्रवात" },
-      { id: "ecosystem", kind: "specialist", label: "Ecosystem", label_hi: "पारिस्थितिकी" },
-      { id: "pfz", kind: "specialist", label: "Fishing zone", label_hi: "मछली क्षेत्र" },
-      { id: "recommendation", kind: "final", label: "Final assessment", label_hi: "आकलन" },
-    ],
-  };
-
-  let topology = FALLBACK_TOPOLOGY;
-  let nodeById = {};
-
-  function indexTopology() {
-    nodeById = {};
-    (topology.nodes || []).forEach((n) => { nodeById[n.id] = n; });
-  }
-  indexTopology();
-
-  function specialistIds() {
-    return (topology.nodes || [])
-      .filter((n) => n.kind === "specialist")
-      .map((n) => n.id);
-  }
-
-  fetch("/api/graph", { headers: { Accept: "application/json" } })
-    .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
-      if (data && Array.isArray(data.nodes) && data.nodes.length) {
-        topology = data;
-        indexTopology();
-        rebuildFlow();
-      }
-    })
-    .catch(() => { /* keep the fallback */ });
-
-  // ==========================================================
-  // Flow diagram
-  // ==========================================================
-
-  const STATUS_TEXT = {
-    pending: ["Waiting", "प्रतीक्षा"],
-    active: ["Running", "चल रहा है"],
-    done: ["Completed", "पूर्ण"],
-    partial: ["Partial data", "आंशिक"],
-    failed: ["No data", "डेटा नहीं"],
-    skipped: ["Not required", "आवश्यक नहीं"],
-  };
-
-  const flowDiagram = $("flowDiagram");
-  const flowSection = $("flowSection");
-
-  function nodeInner(node) {
-    return `
-      <span class="flow-icon" aria-hidden="true">${ICONS[node.id] || ICONS.planner}</span>
-      <span class="flow-label">${bi(node.label, node.label_hi)}</span>
-      <span class="flow-status" data-status-for="${esc(node.id)}">Waiting</span>
-    `;
-  }
-
-  function makeNode(node, extraClass) {
-    const el = document.createElement("div");
-    el.className = `flow-node status-pending${extraClass ? " " + extraClass : ""}`;
-    el.dataset.node = node.id;
-    el.innerHTML = nodeInner(node);
-    return el;
-  }
-
-  function makeStem() {
-    const el = document.createElement("div");
-    el.className = "flow-stem";
-    return el;
-  }
-
-  function rebuildFlow() {
-    flowDiagram.innerHTML = "";
-
-    const planner = nodeById[topology.entry] || FALLBACK_TOPOLOGY.nodes[0];
-    flowDiagram.appendChild(makeNode(planner, "flow-planner"));
-    flowDiagram.appendChild(makeStem());
-
-    const rowOuter = document.createElement("div");
-    rowOuter.className = "flow-row-outer";
-    const rowWrap = document.createElement("div");
-    rowWrap.className = "flow-row-wrap";
-    const bus = document.createElement("div");
-    bus.className = "flow-bus";
-    const columns = document.createElement("div");
-    columns.className = "flow-columns";
-
-    specialistIds().forEach((id) => {
-      const col = document.createElement("div");
-      col.className = "flow-column";
-      col.appendChild(makeStem());
-      col.appendChild(makeNode(nodeById[id]));
-      columns.appendChild(col);
-    });
-
-    rowWrap.appendChild(bus);
-    rowWrap.appendChild(columns);
-    rowOuter.appendChild(rowWrap);
-    flowDiagram.appendChild(rowOuter);
-
-    flowDiagram.appendChild(makeStem());
-
-    const finalNode = nodeById[topology.final] || { id: "recommendation", label: "Final assessment", label_hi: "आकलन" };
-    flowDiagram.appendChild(makeNode(finalNode, "flow-final"));
-  }
-
-  rebuildFlow();
-
-  function setFlowStatus(map) {
-    Object.keys(map).forEach((id) => {
-      const status = map[id];
-      const el = flowDiagram.querySelector(`.flow-node[data-node="${CSS.escape(id)}"]`);
-      if (!el) return;
-      el.className = el.className.replace(/status-\w+/g, "").trim();
-      el.classList.add(`status-${status}`);
-      const label = el.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
-      const text = STATUS_TEXT[status] || [status, ""];
-      if (label) label.innerHTML = bi(text[0], text[1]);
-    });
-  }
-
-  function resetFlow(status) {
-    const map = {};
-    (topology.nodes || []).forEach((n) => { map[n.id] = status; });
-    setFlowStatus(map);
-  }
-
-  // ==========================================================
-  // Elements
-  // ==========================================================
-
-  const latEl = $("lat");
-  const lonEl = $("lon");
-  const questionEl = $("question");
-  const runBtn = $("runBtn");
-  const presets = $("presets");
-  const geoBtn = $("geoBtn");
-  const placeholder = $("placeholder");
-  const results = $("results");
-  const faultPanel = $("faultPanel");
-  const faultTitle = $("faultTitle");
-  const faultBody = $("faultBody");
-  const faultRetry = $("faultRetry");
-  const progressBlock = $("progressBlock");
-  const progressLabel = $("progressLabel");
-  const progressFill = $("progressFill");
-  const progressNote = $("progressNote");
-  const elapsedLabel = $("elapsedLabel");
-
-  const RISK_COLORS = {
-    LOW: "var(--low)",
-    MODERATE: "var(--moderate)",
-    HIGH: "var(--high)",
-    SEVERE: "var(--severe)",
-    UNKNOWN: "var(--unknown)",
-  };
-
-  // The run button holds a nested Devanagari span, so its label is
-  // rebuilt rather than overwritten with textContent (which used to
-  // delete the Hindi line permanently on the first run).
-  function setRunButton(mode) {
-    if (mode === "running") {
-      runBtn.innerHTML = bi("Running…", "चल रहा है…");
-      runBtn.disabled = true;
-      runBtn.setAttribute("aria-busy", "true");
-    } else {
-      runBtn.innerHTML = bi("Run assessment", "आकलन चलाएँ");
-      runBtn.disabled = false;
-      runBtn.removeAttribute("aria-busy");
-    }
-  }
-  setRunButton("idle");
-
-  // ==========================================================
-  // Panels
-  // ==========================================================
-
-  // The results column would otherwise sit empty for the 15-40s a run
-  // takes, so the placeholder becomes the "working" state instead of
-  // being hidden.
-  function showPlaceholder(mode) {
-    if (mode === "running") {
-      $("placeholderTitle").innerHTML = bi("Assessment in progress", "आकलन जारी है");
-      $("placeholderBody").innerHTML = bi(
-        "Samudra is calling live marine data sources. Progress is shown above.",
-        "Samudra लाइव समुद्री डेटा स्रोतों से जानकारी ले रहा है। प्रगति ऊपर दिख रही है।"
-      );
-    } else {
-      $("placeholderTitle").innerHTML = bi("No assessment yet", "अभी तक कोई आकलन नहीं");
-      $("placeholderBody").innerHTML = bi(
-        "Pick a location and ask a question to run a live marine check.",
-        "कोई स्थान चुनें और लाइव समुद्री जांच के लिए प्रश्न पूछें।"
-      );
-    }
-    placeholder.style.display = "";
-    faultPanel.classList.remove("show");
-    results.classList.remove("show");
-  }
-
-  function showFault(title, message) {
-    placeholder.style.display = "none";
-    results.classList.remove("show");
-    faultTitle.textContent = title;
-    faultBody.textContent = message;
-    faultPanel.classList.add("show");
-  }
-
-  // ==========================================================
-  // Input handling
-  // ==========================================================
-
-  function syncPresetChips() {
-    const lat = latEl.value.trim();
-    const lon = lonEl.value.trim();
-    Array.prototype.forEach.call(presets.children, (chip) => {
-      const match =
-        Math.abs(parseFloat(chip.dataset.lat) - parseFloat(lat)) < 1e-4 &&
-        Math.abs(parseFloat(chip.dataset.lon) - parseFloat(lon)) < 1e-4;
-      chip.setAttribute("aria-pressed", String(match));
-    });
-  }
-
-  presets.addEventListener("click", (e) => {
-    const btn = e.target.closest(".chip");
-    if (!btn) return;
-    latEl.value = btn.dataset.lat;
-    lonEl.value = btn.dataset.lon;
-    syncPresetChips();
-  });
-
-  latEl.addEventListener("input", syncPresetChips);
-  lonEl.addEventListener("input", syncPresetChips);
-  syncPresetChips();
-
-  geoBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) {
-      showFault("LOCATION UNAVAILABLE", "This browser will not share a location. Enter coordinates manually. / यह ब्राउज़र स्थान साझा नहीं करता। निर्देशांक स्वयं दर्ज करें।");
-      return;
-    }
-    geoBtn.disabled = true;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        latEl.value = pos.coords.latitude.toFixed(4);
-        lonEl.value = pos.coords.longitude.toFixed(4);
-        syncPresetChips();
-        geoBtn.disabled = false;
-      },
-      () => {
-        geoBtn.disabled = false;
-        showFault("LOCATION DENIED", "Location permission was refused. Enter coordinates manually. / स्थान की अनुमति नहीं मिली। निर्देशांक स्वयं दर्ज करें।");
-      },
-      { timeout: 10000 }
-    );
-  });
-
-  // ==========================================================
-  // Run
-  // ==========================================================
-
-  let inFlight = null;      // AbortController for the current run
-  let elapsedTimer = null;
-  let lastResult = null;
-
-  function startElapsed() {
-    const t0 = Date.now();
-    elapsedLabel.textContent = "0.0s";
-    stopElapsed();
-    elapsedTimer = setInterval(() => {
-      elapsedLabel.textContent = ((Date.now() - t0) / 1000).toFixed(1) + "s";
-    }, 100);
-  }
-
-  function stopElapsed() {
-    if (elapsedTimer) {
-      clearInterval(elapsedTimer);
-      elapsedTimer = null;
-    }
-  }
-
-  function setProgress(doneCount, totalCount, labelEn, labelHi) {
-    const pct = totalCount > 0 ? Math.min(100, (doneCount / totalCount) * 100) : 0;
-    progressFill.style.width = pct + "%";
-    progressLabel.innerHTML = biSlash(labelEn, labelHi);
-  }
-
-  async function runAssessment() {
-    const latitude = parseFloat(latEl.value);
-    const longitude = parseFloat(lonEl.value);
-    const question = questionEl.value.trim();
-
-    latEl.setAttribute("aria-invalid", "false");
-    lonEl.setAttribute("aria-invalid", "false");
-
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-      latEl.setAttribute("aria-invalid", "true");
-      showFault("BAD COORDINATES", "Latitude must be a number between -90 and 90. / अक्षांश -90 से 90 के बीच होना चाहिए।");
-      return;
-    }
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      lonEl.setAttribute("aria-invalid", "true");
-      showFault("BAD COORDINATES", "Longitude must be a number between -180 and 180. / देशांतर -180 से 180 के बीच होना चाहिए।");
-      return;
-    }
-    if (!question) {
-      showFault("NO QUESTION", "Enter a question about the location before running an assessment. / स्थान के बारे में एक प्रश्न दर्ज करें।");
-      return;
-    }
-
-    // A second click replaces the first run rather than racing it.
-    if (inFlight) inFlight.abort();
-    const controller = new AbortController();
-    inFlight = controller;
-
-    showPlaceholder("running");
-    setRunButton("running");
-    flowSection.classList.add("show");
-    progressBlock.classList.add("show");
-    progressNote.textContent = "";
-    startElapsed();
-
-    // Only the planner knows which specialists are required, and only
-    // once it has run — so everything starts pending and the server's
-    // planned_nodes list (computed by graph.route_after_planner) is
-    // what marks nodes active or skipped.
-    resetFlow("pending");
-    setFlowStatus({ [topology.entry]: "active" });
-    setProgress(0, 1, "Planning…", "योजना बन रही है…");
-
-    let plannedSpecialists = [];
-    const finishedSpecialists = new Set();
-    let finalData = null;
-    let hardError = null;
-
-    // Kept so a stream that dies mid-run can say how far it got
-    // instead of the useless "ended without a final result".
-    let eventCount = 0;
-    let lastEventType = "none";
-    let lastHeartbeat = null;
-    let lastRss = null;
-
-    // The completed assessment, kept from the recommendation node's own
-    // event so a lost `final` event doesn't lose the result with it.
-    let salvaged = null;
-
-    function onPlanner(evt) {
-      const planned = Array.isArray(evt.planned_nodes) ? evt.planned_nodes : [];
-      const all = specialistIds();
-      plannedSpecialists = all.filter((id) => planned.indexOf(id) !== -1);
-
-      // A rejection is a valid planner outcome, not a planner failure —
-      // but a planner that ran out of time genuinely did fail.
-      const map = {};
-      map[topology.entry] = evt.timed_out ? "failed" : "done";
-      all.forEach((id) => {
-        map[id] = plannedSpecialists.indexOf(id) !== -1 ? "active" : "skipped";
-      });
-      if (evt.rejected) map[topology.final] = "active";
-      setFlowStatus(map);
-
-      if (evt.rejected) {
-        setProgress(1, 1, "Question out of scope", "प्रश्न दायरे से बाहर");
-        progressNote.textContent = evt.rejection_reason || "";
-      } else {
-        setProgress(0, plannedSpecialists.length + 1,
-          `Running ${plannedSpecialists.length} specialist${plannedSpecialists.length === 1 ? "" : "s"}…`,
-          "विशेषज्ञ एजेंट चल रहे हैं…");
-      }
-    }
-
-    const STATUS_CLASS = { SUCCESS: "done", PARTIAL: "partial", FAILED: "failed" };
-
-    function onNodeDone(evt) {
-      if (evt.node === topology.final) {
-        setFlowStatus({ [topology.final]: STATUS_CLASS[evt.node_status] || "done" });
-
-        // The assessment is complete at this point. The `final` event
-        // that follows carries the bulky agent data and is the most
-        // likely thing to be lost, so keep what the user came for the
-        // moment it arrives.
-        if (evt.recommendation) {
-          salvaged = {
-            latitude: latitude,
-            longitude: longitude,
-            question: question,
-            recommendation: evt.recommendation,
-            plan: {
-              activity: evt.activity,
-              date: evt.date,
-            },
-            rejected: !!evt.rejected,
-            timed_out: !!evt.timed_out,
-            rejection_reason: evt.rejection_reason,
-            agents: {},
-            completed_nodes: evt.completed_nodes || [],
-            duration_seconds: evt.elapsed_seconds,
-            partial: true,
-          };
-        }
-        return;
-      }
-
-      finishedSpecialists.add(evt.node);
-      setFlowStatus({ [evt.node]: STATUS_CLASS[evt.node_status] || "done" });
-
-      const total = plannedSpecialists.length + 1;
-      setProgress(finishedSpecialists.size, total, "Gathering agent data…", "एजेंट डेटा एकत्र हो रहा है…");
-
-      if (plannedSpecialists.length && finishedSpecialists.size >= plannedSpecialists.length) {
-        setFlowStatus({ [topology.final]: "active" });
-        setProgress(finishedSpecialists.size, total, "Writing the assessment…", "आकलन तैयार हो रहा है…");
-      }
-    }
-
-    try {
-      const res = await fetch("/api/ask/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ latitude, longitude, question }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        let detail = "";
-        try {
-          const body = await res.json();
-          if (Array.isArray(body.detail)) {
-            detail = body.detail
-              .map((d) => `${(d.loc || []).slice(-1)[0] || "field"}: ${d.msg}`)
-              .join("; ");
-          } else if (typeof body.detail === "string") {
-            detail = body.detail;
-          } else if (typeof body.message === "string") {
-            detail = body.message;
-          }
-        } catch (_) { /* body wasn't JSON */ }
-
-        if (res.status === 502 || res.status === 503 || res.status === 504) {
-          showFault(`NO SIGNAL (${res.status})`,
-            "One of Samudra's marine data sources didn't respond in time — this can happen when a backend is cold-starting. Wait about a minute and try again. / Samudra के किसी डेटा स्रोत ने समय पर जवाब नहीं दिया। एक मिनट रुककर फिर कोशिश करें।");
-        } else if (res.status === 422) {
-          showFault("REQUEST REJECTED (422)",
-            detail || "Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।");
-        } else if (res.status >= 500) {
-          showFault(`INSTRUMENT FAULT (${res.status})`,
-            detail || "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
-        } else {
-          showFault(`REQUEST REJECTED (${res.status})`,
-            detail || "Check the coordinates and question, then try again. / निर्देशांक और प्रश्न जांचें, फिर कोशिश करें।");
-        }
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let sep;
-        while ((sep = buffer.indexOf("\n\n")) !== -1) {
-          const raw = buffer.slice(0, sep);
-          buffer = buffer.slice(sep + 2);
-
-          const line = raw.split("\n").find((l) => l.startsWith("data:"));
-          if (!line) continue;
-
-          let evt;
-          try { evt = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
-
-          eventCount += 1;
-          lastEventType = evt.type || "unknown";
-
-          if (evt.memory_rss_mb != null) {
-            lastRss = evt.memory_rss_mb;
-            progressNote.textContent = `server memory ${lastRss} MB`;
-          }
-
-          if (evt.type === "node_done") {
-            if (evt.node === topology.entry) onPlanner(evt);
-            else onNodeDone(evt);
-          } else if (evt.type === "heartbeat") {
-            // The server is alive; the elapsed clock is already local.
-            lastHeartbeat = evt.elapsed_seconds;
-          } else if (evt.type === "final") {
-            finalData = evt;
-          } else if (evt.type === "error") {
-            hardError = evt.detail || "";
-          }
-        }
-      }
-
-      if (finalData && finalData.status !== "ERROR") {
-        setFlowStatus({ [topology.final]: "done" });
-        setProgress(1, 1, "Assessment ready", "आकलन तैयार");
-
-        // If the final event arrived stripped (the server replaces an
-        // oversized frame with a stub rather than dropping the
-        // connection), fall back to the copy kept from the
-        // recommendation node.
-        const best = (!finalData.recommendation && salvaged)
-          ? Object.assign({}, salvaged, { duration_seconds: finalData.duration_seconds })
-          : finalData;
-
-        lastResult = best;
-        renderResults(best, latitude, longitude);
-      } else if (finalData || hardError) {
-        setFlowStatus({ [topology.final]: "failed" });
-        showFault("INSTRUMENT FAULT",
-          hardError || (finalData && finalData.error) ||
-          "The assessment could not be completed. Try again in a moment. / आकलन पूरा नहीं हो सका। कुछ देर बाद फिर कोशिश करें।");
-      } else if (salvaged) {
-        // The stream died after the assessment was written but before
-        // the final event landed. The result is here; only the
-        // technical readout is missing. Show it rather than throwing
-        // away a completed run.
-        setFlowStatus({ [topology.final]: "done" });
-        setProgress(1, 1, "Assessment ready", "आकलन तैयार");
-        lastResult = salvaged;
-        renderResults(salvaged, latitude, longitude);
-      } else {
-        // The connection closed with no terminal event. Report how far
-        // it got — that is the difference between "the server never
-        // answered" and "the server died part-way through the run".
-        const where = plannedSpecialists.length
-          ? `after the planner (${finishedSpecialists.size}/${plannedSpecialists.length} specialists done)`
-          : "before the planner finished";
-
-        const detail = eventCount === 0
-          ? "The server accepted the request but sent nothing at all."
-          : `The connection closed ${where}, ${eventCount} event${eventCount === 1 ? "" : "s"} in (last: ${lastEventType}${lastHeartbeat != null ? ", " + lastHeartbeat + "s" : ""}).`;
-
-        // The last memory reading before the connection died is the
-        // only trace a SIGKILL leaves.
-        const mem = lastRss != null
-          ? ` Server memory at the last heartbeat: ${lastRss} MB.`
-          : "";
-
-        showFault("CONNECTION DROPPED",
-          detail + mem + " The server was cut off mid-run. / सर्वर बीच में बंद हो गया।");
-
-        // The server writes each step of a run to disk, and that file
-        // outlives the worker process. Ask it what it was doing when
-        // it stopped — this is the one record a killed process leaves.
-        try {
-          const res = await fetch("/api/last-run", { cache: "no-store" });
-          if (res.ok) {
-            const trace = await res.json();
-            const stop = trace && trace.stopped_after;
-            if (trace && trace.available && !trace.finished && stop) {
-              const where = stop.node
-                ? `${stop.what} (${stop.node})`
-                : stop.running_after
-                ? `${stop.what}, running after ${stop.running_after}`
-                : stop.what;
-              faultBody.textContent +=
-                ` Server's own record: last step was "${where}" at ${stop.at_seconds}s` +
-                (stop.memory_rss_mb != null ? `, memory ${stop.memory_rss_mb} MB` : "") +
-                ". The process stopped there.";
-            } else if (trace && trace.available && trace.finished) {
-              faultBody.textContent +=
-                ` Server's own record says the run finished (${trace.outcome}) — so the result was lost in transit, not on the server.`;
+
+
+        <!-- =========================
+             INPUT + MAP
+        ========================== -->
+
+        <section class="dashboard-grid">
+
+
+            <!-- INPUT CARD -->
+
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div class="card-title">
+
+                        <div class="card-icon">
+                            📍
+                        </div>
+
+                        Mission Parameters
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <!-- LOCATION -->
+
+                    <div class="form-group">
+
+                        <label for="location">
+                            LOCATION
+                        </label>
+
+                        <input
+                            id="location"
+                            type="text"
+                            placeholder="e.g. Digha coast"
+                            autocomplete="off"
+                        >
+
+                    </div>
+
+
+                    <!-- COORDINATES -->
+
+                    <div class="form-group">
+
+                        <label>
+                            COORDINATES
+                        </label>
+
+                        <div class="coordinate-grid">
+
+                            <div>
+                                <input
+                                    id="latitude"
+                                    type="number"
+                                    step="any"
+                                    placeholder="Latitude"
+                                >
+                            </div>
+
+                            <div>
+                                <input
+                                    id="longitude"
+                                    type="number"
+                                    step="any"
+                                    placeholder="Longitude"
+                                >
+                            </div>
+
+                        </div>
+
+                        <button
+                            id="useLocationBtn"
+                            class="btn-location"
+                            type="button"
+                        >
+                            ◎ Use current map position
+                        </button>
+
+                    </div>
+
+
+                    <!-- DATE -->
+
+                    <div class="form-group">
+
+                        <label for="plannedDatetime">
+                            PLANNED DATE & TIME
+                        </label>
+
+                        <input
+                            id="plannedDatetime"
+                            type="datetime-local"
+                        >
+
+                    </div>
+
+
+                    <!-- ACTIVITY -->
+
+                    <div class="form-group">
+
+                        <label for="activity">
+                            MARINE ACTIVITY
+                        </label>
+
+                        <select id="activity">
+
+                            <option value="general">
+                                General Marine Activity
+                            </option>
+
+                            <option value="fishing">
+                                Fishing
+                            </option>
+
+                            <option value="boating">
+                                Boating
+                            </option>
+
+                            <option value="shipping">
+                                Shipping
+                            </option>
+
+                            <option value="research">
+                                Marine Research
+                            </option>
+
+                            <option value="tourism">
+                                Coastal Tourism
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- ACTION BUTTONS -->
+
+                    <div class="button-row">
+
+                        <button
+                            id="assessBtn"
+                            class="btn-primary"
+                            type="button"
+                        >
+                            RUN MARINE ASSESSMENT
+                        </button>
+
+                        <button
+                            id="resetBtn"
+                            class="btn-secondary"
+                            type="button"
+                        >
+                            RESET
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- MAP CARD -->
+
+            <div class="card map-card">
+
+                <div class="card-header">
+
+                    <div class="card-title">
+
+                        <div class="card-icon">
+                            🗺️
+                        </div>
+
+                        Operational Area
+
+                    </div>
+
+                    <div
+                        id="mapStatus"
+                        style="
+                            color:#6f879c;
+                            font-size:10px;
+                        "
+                    >
+                        Click map to select
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="map-wrapper">
+
+                        <div class="map-overlay">
+                            📌 Click anywhere to place marker
+                        </div>
+
+                        <div id="map"></div>
+
+                        <div
+                            id="mapCoordinates"
+                            class="map-coordinates"
+                        >
+                            LAT: -- &nbsp; LNG: --
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =========================
+             RESULTS
+        ========================== -->
+
+        <section class="results-section">
+
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div class="card-title">
+
+                        <div class="card-icon">
+                            🧠
+                        </div>
+
+                        Intelligence Assessment
+
+                    </div>
+
+                    <div
+                        id="assessmentStatus"
+                        style="
+                            color:#6f879c;
+                            font-size:10px;
+                        "
+                    >
+                        Awaiting assessment
+                    </div>
+
+                </div>
+
+
+                <!-- METRICS -->
+
+                <div class="results-grid">
+
+                    <div class="metric">
+
+                        <div class="metric-label">
+                            Overall Risk
+                        </div>
+
+                        <div
+                            id="overallRisk"
+                            class="metric-value"
+                        >
+                            --
+                        </div>
+
+                        <div class="metric-description">
+                            Combined marine assessment
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-label">
+                            Weather
+                        </div>
+
+                        <div
+                            id="weatherRisk"
+                            class="metric-value"
+                        >
+                            --
+                        </div>
+
+                        <div class="metric-description">
+                            Atmospheric conditions
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-label">
+                            Ocean
+                        </div>
+
+                        <div
+                            id="oceanRisk"
+                            class="metric-value"
+                        >
+                            --
+                        </div>
+
+                        <div class="metric-description">
+                            Sea-state conditions
+                        </div>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                        <div class="metric-label">
+                            Cyclone
+                        </div>
+
+                        <div
+                            id="cycloneRisk"
+                            class="metric-value"
+                        >
+                            --
+                        </div>
+
+                        <div class="metric-description">
+                            Tropical system risk
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- LOADING -->
+
+                <div
+                    id="loading"
+                    class="loading"
+                >
+
+                    <span class="loader"></span>
+
+                    ORCA agents are analysing marine conditions...
+
+                </div>
+
+
+                <!-- ALERT -->
+
+                <div
+                    id="alert"
+                    class="alert"
+                ></div>
+
+
+                <!-- OUTPUT -->
+
+                <div class="output-container">
+
+                    <div
+                        id="emptyState"
+                        class="empty-state"
+                    >
+                        Run an assessment to view
+                        the coordinated intelligence output.
+                    </div>
+
+                    <pre
+                        id="output"
+                        style="display:none;"
+                    ></pre>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- FOOTER -->
+
+        <footer>
+
+            <div>
+                ORCA Marine Intelligence System
+            </div>
+
+            <div>
+                Ocean • Weather • Tide • Cyclone • Ecosystem
+            </div>
+
+        </footer>
+
+    </main>
+
+
+    <!-- =========================
+         LEAFLET
+    ========================== -->
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+
+
+    <script>
+
+        /* ============================================================
+           CONFIGURATION
+        ============================================================ */
+
+        /*
+         * IMPORTANT:
+         * Change this ONLY if your FastAPI endpoint is different.
+         *
+         * If index.html is served by the same FastAPI server:
+         */
+        const API_URL = "/api/assess";
+
+
+        /* ============================================================
+           DOM ELEMENTS
+        ============================================================ */
+
+        const locationInput =
+            document.getElementById("location");
+
+        const latitudeInput =
+            document.getElementById("latitude");
+
+        const longitudeInput =
+            document.getElementById("longitude");
+
+        const plannedDatetimeInput =
+            document.getElementById("plannedDatetime");
+
+        const activityInput =
+            document.getElementById("activity");
+
+        const assessBtn =
+            document.getElementById("assessBtn");
+
+        const resetBtn =
+            document.getElementById("resetBtn");
+
+        const useLocationBtn =
+            document.getElementById("useLocationBtn");
+
+        const loading =
+            document.getElementById("loading");
+
+        const output =
+            document.getElementById("output");
+
+        const emptyState =
+            document.getElementById("emptyState");
+
+        const alertBox =
+            document.getElementById("alert");
+
+        const assessmentStatus =
+            document.getElementById("assessmentStatus");
+
+        const mapCoordinates =
+            document.getElementById("mapCoordinates");
+
+        const mapStatus =
+            document.getElementById("mapStatus");
+
+        const overallRisk =
+            document.getElementById("overallRisk");
+
+        const weatherRisk =
+            document.getElementById("weatherRisk");
+
+        const oceanRisk =
+            document.getElementById("oceanRisk");
+
+        const cycloneRisk =
+            document.getElementById("cycloneRisk");
+
+
+        /* ============================================================
+           DEFAULT MAP POSITION
+        ============================================================ */
+
+        const DEFAULT_LAT = 21.63;
+        const DEFAULT_LNG = 87.51;
+
+
+        /* ============================================================
+           INITIALIZE MAP
+        ============================================================ */
+
+        const map = L.map("map", {
+            zoomControl: true
+        }).setView(
+            [DEFAULT_LAT, DEFAULT_LNG],
+            7
+        );
+
+
+        /* ============================================================
+           OPENSTREETMAP TILES
+        ============================================================ */
+
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                maxZoom: 19,
+                attribution:
+                    '&copy; OpenStreetMap contributors'
             }
-          }
-        } catch (_) { /* diagnostics are best-effort */ }
-      }
-    } catch (err) {
-      if (err && err.name === "AbortError") return;
-      showFault("NO SIGNAL",
-        "Couldn't reach Samudra's server. Check your connection and try again. / सर्वर से संपर्क नहीं हो सका। अपना कनेक्शन जांचें।");
-    } finally {
-      if (inFlight === controller) inFlight = null;
-      stopElapsed();
-      setRunButton("idle");
-    }
-  }
+        ).addTo(map);
 
-  // ==========================================================
-  // Rendering
-  // ==========================================================
 
-  function fillList(listEl, panelEl, items) {
-    listEl.innerHTML = "";
-    const values = Array.isArray(items) ? items.filter(Boolean) : [];
-    values.forEach((item) => {
-      const li = document.createElement("li");
-      li.textContent = typeof item === "string" ? item : JSON.stringify(item);
-      listEl.appendChild(li);
-    });
-    panelEl.style.display = values.length ? "" : "none";
-  }
+        /* ============================================================
+           CUSTOM MARKER
+        ============================================================ */
 
-  function statusPill(status) {
-    const s = String(status || "").toUpperCase();
-    if (s === "SUCCESS") return '<span class="pill ok">success</span>';
-    if (s === "PARTIAL") return '<span class="pill partial">partial</span>';
-    if (s === "FAILED") return '<span class="pill fail">failed</span>';
-    return `<span class="pill muted">${esc(s || "unknown")}</span>`;
-  }
+        const markerIcon =
+            L.divIcon({
+                className: "orca-marker",
+                html: `
+                    <div style="
+                        width:32px;
+                        height:32px;
+                        border-radius:50% 50% 50% 0;
+                        background:#22d3ee;
+                        transform:rotate(-45deg);
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        box-shadow:
+                            0 0 0 5px rgba(34,211,238,0.12),
+                            0 0 25px rgba(34,211,238,0.65);
+                        border:2px solid #e0fbff;
+                    ">
+                        <div style="
+                            width:9px;
+                            height:9px;
+                            border-radius:50%;
+                            background:#06111d;
+                            transform:rotate(45deg);
+                        "></div>
+                    </div>
+                `,
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
 
-  function renderAgents(agents, note) {
-    const list = $("agentList");
-    list.innerHTML = "";
 
-    const ids = Object.keys(agents || {});
-    if (!ids.length) {
-      list.innerHTML = `<div class="empty">${esc(
-        note || "No agent envelopes were returned for this run."
-      )}</div>`;
-      return;
-    }
+        let marker =
+            L.marker(
+                [DEFAULT_LAT, DEFAULT_LNG],
+                {
+                    draggable: true,
+                    icon: markerIcon
+                }
+            ).addTo(map);
 
-    const order = specialistIds();
-    ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 
-    ids.forEach((id) => {
-      const meta = nodeById[id] || { label: id, label_hi: "" };
-      const payload = agents[id];
-      const status = payload && typeof payload === "object" ? payload.status : null;
+        /* ============================================================
+           SET MARKER
+        ============================================================ */
 
-      const card = document.createElement("details");
-      card.className = "agent-card";
-      card.innerHTML =
-        `<summary><span class="agent-name">${biSlash(meta.label, meta.label_hi)}</span>${statusPill(status)}</summary>` +
-        `<pre></pre>`;
-      card.querySelector("pre").textContent = JSON.stringify(payload, null, 2);
-      list.appendChild(card);
-    });
-  }
+        function setMarker(
+            latitude,
+            longitude,
+            centerMap = true
+        ) {
 
-  function renderResults(data, latitude, longitude) {
-    const rec = (data && data.recommendation) || {};
-    const plan = (data && data.plan) || {};
-    const risk = String(rec.risk_level || "UNKNOWN").toUpperCase();
+            latitude =
+                Number(latitude);
 
-    // Planner rejection is a legitimate outcome, not a failure.
-    const rejectNotice = $("rejectNotice");
-    if (data.rejected) {
-      // A timed-out planner also arrives as a rejection, but calling it
-      // "out of scope" would blame the user's question for a server
-      // problem.
-      $("rejectTitle").innerHTML = data.timed_out
-        ? bi("Timed out", "समय समाप्त")
-        : bi("Out of scope", "दायरे से बाहर");
-      $("rejectText").textContent =
-        data.rejection_reason ||
-        "This question is outside what Samudra can assess for the given location.";
-      rejectNotice.classList.add("show");
-    } else {
-      rejectNotice.classList.remove("show");
-    }
+            longitude =
+                Number(longitude);
 
-    const riskPanel = $("riskPanel");
-    riskPanel.style.setProperty("--risk-color", RISK_COLORS[risk] || RISK_COLORS.UNKNOWN);
-    $("riskText").textContent = risk;
-    $("riskActivity").textContent = plan.activity && plan.activity !== "unknown"
-      ? `for ${plan.activity}` : "";
 
-    $("locValue").textContent = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+            if (
+                Number.isNaN(latitude) ||
+                Number.isNaN(longitude)
+            ) {
+                return;
+            }
 
-    const nodesRun = Array.isArray(data.completed_nodes) ? data.completed_nodes.length : 0;
-    $("locSub").textContent =
-      `${plan.date || "today"} · ${nodesRun} node${nodesRun === 1 ? "" : "s"} · ${data.duration_seconds != null ? data.duration_seconds : "—"}s`;
 
-    $("summaryText").textContent =
-      rec.summary || "No summary was returned for this location.";
+            if (
+                latitude < -90 ||
+                latitude > 90 ||
+                longitude < -180 ||
+                longitude > 180
+            ) {
+                return;
+            }
 
-    const recBanner = $("recBanner");
-    const recText = typeof rec.recommendation === "string" ? rec.recommendation.trim() : "";
-    $("recText").textContent =
-      recText || "No specific recommendation was returned — review the findings below.";
-    recBanner.style.borderColor = recText ? "rgba(95,185,139,0.32)" : "rgba(201,161,90,0.32)";
-    recBanner.style.background = recText ? "rgba(95,185,139,0.07)" : "rgba(201,161,90,0.07)";
 
-    fillList($("findingsList"), $("findingsPanel"), rec.key_findings);
-    fillList($("adviceList"), $("advicePanel"), rec.safety_advice);
+            marker.setLatLng([
+                latitude,
+                longitude
+            ]);
 
-    // Raw per-agent envelopes straight from the graph state, falling
-    // back to whatever the LLM put in agent_findings.
-    renderAgents(
-      data.agents && Object.keys(data.agents).length
-        ? data.agents
-        : rec.agent_findings || {},
-      data.partial
-        ? "The assessment arrived, but the connection closed before the agent data did. The result above is complete; only this readout is missing."
-        : data.agents_omitted
-        ? `Agent data was omitted: ${data.agents_omitted}`
-        : null
-    );
 
-    faultPanel.classList.remove("show");
-    placeholder.style.display = "none";
-    results.classList.add("show");
-  }
+            latitudeInput.value =
+                latitude.toFixed(6);
 
-  // ==========================================================
-  // Result actions
-  // ==========================================================
+            longitudeInput.value =
+                longitude.toFixed(6);
 
-  function plainTextResult(data) {
-    const rec = (data && data.recommendation) || {};
-    const lines = [
-      `Samudra assessment — ${data.latitude}, ${data.longitude}`,
-      `Question: ${data.question || ""}`,
-      `Risk level: ${rec.risk_level || "UNKNOWN"}`,
-      "",
-      rec.summary || "",
-      "",
-      `Recommendation: ${rec.recommendation || "—"}`,
-    ];
-    if (Array.isArray(rec.key_findings) && rec.key_findings.length) {
-      lines.push("", "Key findings:", ...rec.key_findings.map((f) => `  - ${f}`));
-    }
-    if (Array.isArray(rec.safety_advice) && rec.safety_advice.length) {
-      lines.push("", "Safety advisory:", ...rec.safety_advice.map((a) => `  - ${a}`));
-    }
-    return lines.join("\n");
-  }
 
-  $("copyBtn").addEventListener("click", async () => {
-    if (!lastResult) return;
-    const btn = $("copyBtn");
-    try {
-      await navigator.clipboard.writeText(plainTextResult(lastResult));
-      btn.textContent = "Copied";
-    } catch (_) {
-      btn.textContent = "Copy failed";
-    }
-    setTimeout(() => { btn.textContent = "Copy assessment"; }, 1800);
-  });
+            mapCoordinates.innerHTML =
+                `LAT: ${latitude.toFixed(5)}
+                 &nbsp; LNG: ${longitude.toFixed(5)}`;
 
-  $("jsonBtn").addEventListener("click", () => {
-    if (!lastResult) return;
-    const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `samudra-${lastResult.latitude}-${lastResult.longitude}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
 
-  // ==========================================================
-  // Wiring
-  // ==========================================================
+            marker
+                .bindPopup(`
+                    <strong>ORCA Operational Point</strong>
+                    <br><br>
+                    Latitude:
+                    ${latitude.toFixed(6)}
+                    <br>
+                    Longitude:
+                    ${longitude.toFixed(6)}
+                `);
 
-  runBtn.addEventListener("click", runAssessment);
-  faultRetry.addEventListener("click", runAssessment);
-  questionEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runAssessment();
-  });
 
-  showPlaceholder("idle");
-})();
-</script>
+            if (centerMap) {
+
+                map.setView(
+                    [latitude, longitude],
+                    Math.max(map.getZoom(), 9),
+                    {
+                        animate: true
+                    }
+                );
+
+            }
+
+        }
+
+
+        /* ============================================================
+           MAP CLICK
+        ============================================================ */
+
+        map.on(
+            "click",
+            function(event) {
+
+                const lat =
+                    event.latlng.lat;
+
+                const lng =
+                    event.latlng.lng;
+
+
+                setMarker(
+                    lat,
+                    lng,
+                    false
+                );
+
+
+                mapStatus.textContent =
+                    "Location selected";
+
+            }
+        );
+
+
+        /* ============================================================
+           MARKER DRAG
+        ============================================================ */
+
+        marker.on(
+            "dragend",
+            function(event) {
+
+                const position =
+                    event.target.getLatLng();
+
+
+                setMarker(
+                    position.lat,
+                    position.lng,
+                    false
+                );
+
+
+                mapStatus.textContent =
+                    "Marker position updated";
+
+            }
+        );
+
+
+        /* ============================================================
+           LATITUDE / LONGITUDE INPUT
+        ============================================================ */
+
+        latitudeInput.addEventListener(
+            "change",
+            updateMapFromInputs
+        );
+
+        longitudeInput.addEventListener(
+            "change",
+            updateMapFromInputs
+        );
+
+
+        function updateMapFromInputs() {
+
+            const lat =
+                parseFloat(
+                    latitudeInput.value
+                );
+
+            const lng =
+                parseFloat(
+                    longitudeInput.value
+                );
+
+
+            if (
+                !Number.isNaN(lat) &&
+                !Number.isNaN(lng)
+            ) {
+
+                setMarker(
+                    lat,
+                    lng,
+                    true
+                );
+
+            }
+
+        }
+
+
+        /* ============================================================
+           CURRENT MAP POSITION BUTTON
+        ============================================================ */
+
+        useLocationBtn.addEventListener(
+            "click",
+            function() {
+
+                const position =
+                    marker.getLatLng();
+
+
+                setMarker(
+                    position.lat,
+                    position.lng,
+                    false
+                );
+
+                mapStatus.textContent =
+                    "Using selected map position";
+
+            }
+        );
+
+
+        /* ============================================================
+           BROWSER GEOLOCATION
+        ============================================================ */
+
+        function useBrowserLocation() {
+
+            if (
+                !navigator.geolocation
+            ) {
+
+                showAlert(
+                    "Browser geolocation is not supported.",
+                    "error"
+                );
+
+                return;
+
+            }
+
+
+            navigator.geolocation.getCurrentPosition(
+
+                function(position) {
+
+                    const lat =
+                        position.coords.latitude;
+
+                    const lng =
+                        position.coords.longitude;
+
+
+                    setMarker(
+                        lat,
+                        lng,
+                        true
+                    );
+
+
+                    mapStatus.textContent =
+                        "Browser location selected";
+
+
+                    showAlert(
+                        "Current browser location selected on the map.",
+                        "success"
+                    );
+
+                },
+
+                function(error) {
+
+                    console.warn(
+                        "Geolocation error:",
+                        error
+                    );
+
+
+                    showAlert(
+                        "Unable to access browser location. You can select a point directly on the map.",
+                        "error"
+                    );
+
+                }
+
+            );
+
+        }
+
+
+        /*
+         * Double-click the location button to use
+         * browser location.
+         */
+        useLocationBtn.addEventListener(
+            "dblclick",
+            useBrowserLocation
+        );
+
+
+        /* ============================================================
+           DEFAULT POSITION
+        ============================================================ */
+
+        setMarker(
+            DEFAULT_LAT,
+            DEFAULT_LNG,
+            false
+        );
+
+
+        /* ============================================================
+           DATETIME DEFAULT
+        ============================================================ */
+
+        function setDefaultDateTime() {
+
+            const now =
+                new Date();
+
+
+            const year =
+                now.getFullYear();
+
+            const month =
+                String(
+                    now.getMonth() + 1
+                ).padStart(2, "0");
+
+            const day =
+                String(
+                    now.getDate()
+                ).padStart(2, "0");
+
+            const hours =
+                String(
+                    now.getHours()
+                ).padStart(2, "0");
+
+            const minutes =
+                String(
+                    now.getMinutes()
+                ).padStart(2, "0");
+
+
+            plannedDatetimeInput.value =
+                `${year}-${month}-${day}T${hours}:${minutes}`;
+
+        }
+
+
+        setDefaultDateTime();
+
+
+        /* ============================================================
+           ALERT HELPER
+        ============================================================ */
+
+        function showAlert(
+            message,
+            type = "error"
+        ) {
+
+            alertBox.textContent =
+                message;
+
+            alertBox.className =
+                `alert show ${type}`;
+
+        }
+
+
+        function hideAlert() {
+
+            alertBox.className =
+                "alert";
+
+            alertBox.textContent =
+                "";
+
+        }
+
+
+        /* ============================================================
+           LOADING STATE
+        ============================================================ */
+
+        function setLoading(
+            isLoading
+        ) {
+
+            if (isLoading) {
+
+                loading.classList.add(
+                    "active"
+                );
+
+                assessBtn.disabled =
+                    true;
+
+                assessBtn.style.opacity =
+                    "0.6";
+
+                assessmentStatus.textContent =
+                    "Agents working...";
+
+            } else {
+
+                loading.classList.remove(
+                    "active"
+                );
+
+                assessBtn.disabled =
+                    false;
+
+                assessBtn.style.opacity =
+                    "1";
+
+            }
+
+        }
+
+
+        /* ============================================================
+           RISK EXTRACTION
+        ============================================================ */
+
+        function findValue(
+            object,
+            keys
+        ) {
+
+            if (
+                !object ||
+                typeof object !== "object"
+            ) {
+                return null;
+            }
+
+
+            for (
+                const key of keys
+            ) {
+
+                if (
+                    object[key] !== undefined &&
+                    object[key] !== null
+                ) {
+
+                    return object[key];
+
+                }
+
+            }
+
+
+            return null;
+
+        }
+
+
+        function findNestedValue(
+            object,
+            paths
+        ) {
+
+            for (
+                const path of paths
+            ) {
+
+                let current =
+                    object;
+
+
+                let valid =
+                    true;
+
+
+                for (
+                    const key of path
+                ) {
+
+                    if (
+                        current &&
+                        typeof current === "object" &&
+                        current[key] !== undefined
+                    ) {
+
+                        current =
+                            current[key];
+
+                    } else {
+
+                        valid =
+                            false;
+
+                        break;
+
+                    }
+
+                }
+
+
+                if (
+                    valid &&
+                    current !== undefined &&
+                    current !== null
+                ) {
+
+                    return current;
+
+                }
+
+            }
+
+
+            return null;
+
+        }
+
+
+        function displayMetric(
+            element,
+            value
+        ) {
+
+            if (
+                value === null ||
+                value === undefined ||
+                value === ""
+            ) {
+
+                element.textContent =
+                    "--";
+
+                return;
+
+            }
+
+
+            if (
+                typeof value === "object"
+            ) {
+
+                if (
+                    value.level !== undefined
+                ) {
+
+                    element.textContent =
+                        value.level;
+
+                } else if (
+                    value.risk !== undefined
+                ) {
+
+                    element.textContent =
+                        value.risk;
+
+                } else {
+
+                    element.textContent =
+                        "Available";
+
+                }
+
+                return;
+
+            }
+
+
+            element.textContent =
+                String(value);
+
+        }
+
+
+        function updateMetrics(
+            data
+        ) {
+
+            const overall =
+                findNestedValue(
+                    data,
+                    [
+                        ["overall_risk"],
+                        ["overallRisk"],
+                        ["risk"],
+                        ["assessment", "overall_risk"],
+                        ["assessment", "overallRisk"],
+                        ["recommendation", "risk"],
+                        ["final_recommendation", "risk"]
+                    ]
+                );
+
+
+            const weather =
+                findNestedValue(
+                    data,
+                    [
+                        ["weather_risk"],
+                        ["weatherRisk"],
+                        ["weather", "risk"],
+                        ["weather", "assessment"],
+                        ["assessment", "weather_risk"]
+                    ]
+                );
+
+
+            const ocean =
+                findNestedValue(
+                    data,
+                    [
+                        ["ocean_risk"],
+                        ["oceanRisk"],
+                        ["ocean", "risk"],
+                        ["ocean", "assessment"],
+                        ["assessment", "ocean_risk"]
+                    ]
+                );
+
+
+            const cyclone =
+                findNestedValue(
+                    data,
+                    [
+                        ["cyclone_risk"],
+                        ["cycloneRisk"],
+                        ["cyclone", "risk"],
+                        ["cyclone", "assessment"],
+                        ["assessment", "cyclone_risk"]
+                    ]
+                );
+
+
+            displayMetric(
+                overallRisk,
+                overall
+            );
+
+            displayMetric(
+                weatherRisk,
+                weather
+            );
+
+            displayMetric(
+                oceanRisk,
+                ocean
+            );
+
+            displayMetric(
+                cycloneRisk,
+                cyclone
+            );
+
+        }
+
+
+        /* ============================================================
+           FORMAT OUTPUT
+        ============================================================ */
+
+        function formatOutput(
+            data
+        ) {
+
+            try {
+
+                return JSON.stringify(
+                    data,
+                    null,
+                    2
+                );
+
+            } catch (
+                error
+            ) {
+
+                return String(data);
+
+            }
+
+        }
+
+
+        /* ============================================================
+           READ STREAMING RESPONSE
+        ============================================================ */
+
+        async function readResponse(
+            response
+        ) {
+
+            /*
+             * If the backend returns normal JSON,
+             * handle it directly.
+             */
+
+            const contentType =
+                response.headers.get(
+                    "content-type"
+                ) || "";
+
+
+            if (
+                contentType.includes(
+                    "application/json"
+                )
+            ) {
+
+                return await response.json();
+
+            }
+
+
+            /*
+             * Otherwise read as text.
+             */
+
+            const text =
+                await response.text();
+
+
+            /*
+             * Try JSON first.
+             */
+
+            try {
+
+                return JSON.parse(
+                    text
+                );
+
+            } catch (
+                error
+            ) {
+
+                return {
+                    response: text
+                };
+
+            }
+
+        }
+
+
+        /* ============================================================
+           RUN ASSESSMENT
+        ============================================================ */
+
+        assessBtn.addEventListener(
+            "click",
+            async function() {
+
+                hideAlert();
+
+
+                const rawLocation =
+                    locationInput.value.trim();
+
+
+                const latitude =
+                    parseFloat(
+                        latitudeInput.value
+                    );
+
+
+                const longitude =
+                    parseFloat(
+                        longitudeInput.value
+                    );
+
+
+                const plannedDatetime =
+                    plannedDatetimeInput.value;
+
+
+                const activity =
+                    activityInput.value;
+
+
+                /* -------------------------
+                   VALIDATION
+                -------------------------- */
+
+                if (
+                    !rawLocation
+                ) {
+
+                    showAlert(
+                        "Please enter a location.",
+                        "error"
+                    );
+
+                    locationInput.focus();
+
+                    return;
+
+                }
+
+
+                if (
+                    Number.isNaN(latitude) ||
+                    Number.isNaN(longitude)
+                ) {
+
+                    showAlert(
+                        "Please provide valid latitude and longitude values.",
+                        "error"
+                    );
+
+                    return;
+
+                }
+
+
+                if (
+                    latitude < -90 ||
+                    latitude > 90
+                ) {
+
+                    showAlert(
+                        "Latitude must be between -90 and 90.",
+                        "error"
+                    );
+
+                    return;
+
+                }
+
+
+                if (
+                    longitude < -180 ||
+                    longitude > 180
+                ) {
+
+                    showAlert(
+                        "Longitude must be between -180 and 180.",
+                        "error"
+                    );
+
+                    return;
+
+                }
+
+
+                if (
+                    !plannedDatetime
+                ) {
+
+                    showAlert(
+                        "Please select the planned date and time.",
+                        "error"
+                    );
+
+                    return;
+
+                }
+
+
+                /* -------------------------
+                   REQUEST PAYLOAD
+                -------------------------- */
+
+                const payload = {
+
+                    user_input: {
+
+                        raw_location_text:
+                            rawLocation,
+
+                        lat:
+                            latitude,
+
+                        lon:
+                            longitude,
+
+                        planned_datetime:
+                            new Date(
+                                plannedDatetime
+                            ).toISOString(),
+
+                        activity:
+                            activity
+
+                    }
+
+                };
+
+
+                console.log(
+                    "ORCA request:",
+                    payload
+                );
+
+
+                /* -------------------------
+                   START LOADING
+                -------------------------- */
+
+                setLoading(
+                    true
+                );
+
+
+                assessmentStatus.textContent =
+                    "Running assessment";
+
+
+                try {
+
+                    const controller =
+                        new AbortController();
+
+
+                    /*
+                     * Frontend safety timeout.
+                     *
+                     * This prevents the UI from appearing
+                     * frozen forever if the backend hangs.
+                     */
+
+                    const timeoutId =
+                        setTimeout(
+                            () => {
+                                controller.abort();
+                            },
+                            120000
+                        );
+
+
+                    const response =
+                        await fetch(
+                            API_URL,
+                            {
+
+                                method:
+                                    "POST",
+
+                                headers: {
+                                    "Content-Type":
+                                        "application/json",
+
+                                    "Accept":
+                                        "application/json"
+                                },
+
+                                body:
+                                    JSON.stringify(
+                                        payload
+                                    ),
+
+                                signal:
+                                    controller.signal
+
+                            }
+                        );
+
+
+                    clearTimeout(
+                        timeoutId
+                    );
+
+
+                    /* -------------------------
+                       HTTP ERROR
+                    -------------------------- */
+
+                    if (
+                        !response.ok
+                    ) {
+
+                        const errorText =
+                            await response.text();
+
+
+                        throw new Error(
+                            `Server returned ${response.status}: ${errorText}`
+                        );
+
+                    }
+
+
+                    /* -------------------------
+                       READ RESPONSE
+                    -------------------------- */
+
+                    const data =
+                        await readResponse(
+                            response
+                        );
+
+
+                    console.log(
+                        "ORCA response:",
+                        data
+                    );
+
+
+                    /* -------------------------
+                       UPDATE UI
+                    -------------------------- */
+
+                    updateMetrics(
+                        data
+                    );
+
+
+                    output.textContent =
+                        formatOutput(
+                            data
+                        );
+
+
+                    output.style.display =
+                        "block";
+
+                    emptyState.style.display =
+                        "none";
+
+
+                    assessmentStatus.textContent =
+                        "Assessment complete";
+
+
+                    showAlert(
+                        "Marine assessment completed successfully.",
+                        "success"
+                    );
+
+                } catch (
+                    error
+                ) {
+
+                    console.error(
+                        "ORCA assessment error:",
+                        error
+                    );
+
+
+                    if (
+                        error.name ===
+                        "AbortError"
+                    ) {
+
+                        showAlert(
+                            "The assessment timed out. One or more backend agents may be unavailable. Please try again.",
+                            "error"
+                        );
+
+                        assessmentStatus.textContent =
+                            "Assessment timed out";
+
+                    } else {
+
+                        showAlert(
+                            error.message ||
+                            "Unable to connect to the ORCA backend.",
+                            "error"
+                        );
+
+                        assessmentStatus.textContent =
+                            "Assessment failed";
+
+                    }
+
+                } finally {
+
+                    setLoading(
+                        false
+                    );
+
+                }
+
+            }
+        );
+
+
+        /* ============================================================
+           RESET
+        ============================================================ */
+
+        resetBtn.addEventListener(
+            "click",
+            function() {
+
+                locationInput.value =
+                    "";
+
+                activityInput.value =
+                    "general";
+
+
+                setDefaultDateTime();
+
+
+                setMarker(
+                    DEFAULT_LAT,
+                    DEFAULT_LNG,
+                    true
+                );
+
+
+                mapStatus.textContent =
+                    "Click map to select";
+
+
+                overallRisk.textContent =
+                    "--";
+
+                weatherRisk.textContent =
+                    "--";
+
+                oceanRisk.textContent =
+                    "--";
+
+                cycloneRisk.textContent =
+                    "--";
+
+
+                assessmentStatus.textContent =
+                    "Awaiting assessment";
+
+
+                output.textContent =
+                    "";
+
+                output.style.display =
+                    "none";
+
+                emptyState.style.display =
+                    "flex";
+
+
+                hideAlert();
+
+            }
+        );
+
+
+        /* ============================================================
+           MAP RESIZE FIX
+        ============================================================ */
+
+        setTimeout(
+            function() {
+
+                map.invalidateSize();
+
+            },
+            300
+        );
+
+
+        window.addEventListener(
+            "resize",
+            function() {
+
+                map.invalidateSize();
+
+            }
+        );
+
+    </script>
 
 </body>
 </html>
