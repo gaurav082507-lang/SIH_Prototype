@@ -31,11 +31,10 @@ import os
 import time
 import traceback
 from pathlib import Path
-from queue import Empty, Queue
 from threading import Thread
 from typing import Any, AsyncIterator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -67,9 +66,15 @@ HEARTBEAT_INTERVAL_S = float(os.getenv("SSE_HEARTBEAT_SECONDS", "2.0"))
 # marine service would keep an SSE connection alive forever.
 GRAPH_TIMEOUT_S = float(os.getenv("GRAPH_TIMEOUT_SECONDS", "300"))
 
-# How often the SSE generator checks the worker queue. Small enough
-# to feel instant, large enough not to spin the event loop.
-QUEUE_POLL_S = 0.05
+# Set SSE_LOG=0 to silence the per-run progress lines. They are on by
+# default because a stalled assessment is otherwise invisible in the
+# Render logs.
+SSE_LOG = os.getenv("SSE_LOG", "1").strip().lower() not in ("0", "false", "no")
+
+
+def _log(message: str) -> None:
+    if SSE_LOG:
+        print(f"[stream] {message}", flush=True)
 
 
 # ============================================================
@@ -732,12 +737,12 @@ def _run_graph(initial_state: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     return state, completed
 
 
-def _run_graph_worker(initial_state: dict[str, Any], event_queue: Queue) -> None:
+def _run_graph_worker(initial_state: dict[str, Any], emit) -> None:
     """
-    Run the graph on a background thread, pushing updates to a queue.
+    Run the graph on a background thread, handing updates to `emit`.
 
-    The SSE generator drains that queue, so a slow node never leaves
-    the HTTP response silent:
+    The SSE generator consumes them, so a slow node never leaves the
+    HTTP response silent:
 
         HTTP request
               |
@@ -749,7 +754,12 @@ def _run_graph_worker(initial_state: dict[str, Any], event_queue: Queue) -> None
               |                      v
               |                marine_graph
               |                      |
-              +<----- Queue <--------+
+              +<----- emit() <-------+
+
+    BaseException, not Exception: if this thread ever dies without
+    emitting, the stream has nothing to report and the browser just
+    sees the connection close — which is exactly the failure that is
+    impossible to diagnose from the client side.
     """
 
     try:
@@ -757,13 +767,17 @@ def _run_graph_worker(initial_state: dict[str, Any], event_queue: Queue) -> None
             initial_state,
             stream_mode="updates",
         ):
-            event_queue.put(("graph_update", step_output))
+            emit(("graph_update", step_output))
 
-        event_queue.put(("graph_finished", None))
+        emit(("graph_finished", None))
 
-    except Exception as exc:
+    except BaseException as exc:  # noqa: BLE001
         traceback.print_exc()
-        event_queue.put(("graph_error", exc))
+
+        try:
+            emit(("graph_error", exc))
+        except Exception:
+            traceback.print_exc()
 
 
 # ============================================================
@@ -831,10 +845,7 @@ def ask(payload: AskRequest):
 # ============================================================
 
 
-async def _stream_ask_events(
-    payload: AskRequest,
-    request: Request,
-) -> AsyncIterator[str]:
+async def _stream_ask_events(payload: AskRequest) -> AsyncIterator[str]:
     """
     Server-Sent Event stream for one assessment.
 
@@ -855,7 +866,20 @@ async def _stream_ask_events(
     final_state: dict[str, Any] = dict(initial_state)
     completed: list[str] = []
 
-    event_queue: Queue = Queue()
+    # The worker runs in a thread; asyncio.Queue is not thread-safe, so
+    # it is fed through call_soon_threadsafe. This replaces an earlier
+    # design that polled a thread Queue and called
+    # request.is_disconnected() on every tick — that hammered the ASGI
+    # receive channel behind Starlette's own disconnect listener and
+    # could tear the response down with no event ever reaching the
+    # browser. Starlette already cancels this generator when the client
+    # goes away, so there is nothing to poll for.
+    loop = asyncio.get_running_loop()
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    def emit(item) -> None:
+        """Called from the graph worker thread."""
+        loop.call_soon_threadsafe(event_queue.put_nowait, item)
 
     yield _sse(
         {
@@ -870,55 +894,50 @@ async def _stream_ask_events(
 
     worker = Thread(
         target=_run_graph_worker,
-        args=(initial_state, event_queue),
+        args=(initial_state, emit),
         daemon=True,
     )
     worker.start()
 
-    last_heartbeat = time.monotonic()
-
-    while True:
-        # The client closing the tab should not leave this generator
-        # (and its heartbeats) running until the graph finishes.
-        if await request.is_disconnected():
-            return
-
-        try:
-            event_type, data = event_queue.get_nowait()
-
-        except Empty:
-            now = time.monotonic()
-            elapsed = now - started
-
-            if elapsed > GRAPH_TIMEOUT_S:
-                yield _sse(
-                    {
-                        "type": "error",
-                        "status": "ERROR",
-                        "detail": (
-                            f"The assessment exceeded {int(GRAPH_TIMEOUT_S)}s "
-                            "and was stopped."
-                        ),
-                        "completed_nodes": list(completed),
-                        "duration_seconds": round(elapsed, 2),
-                    }
+    try:
+        while True:
+            try:
+                event_type, data = await asyncio.wait_for(
+                    event_queue.get(),
+                    timeout=HEARTBEAT_INTERVAL_S,
                 )
 
-                yield _sse(
-                    _final_event(
-                        payload,
-                        final_state,
-                        completed,
-                        elapsed,
-                        status="ERROR",
-                        error="timeout",
+            except asyncio.TimeoutError:
+                elapsed = time.monotonic() - started
+
+                if elapsed > GRAPH_TIMEOUT_S:
+                    _log(f"timeout after {elapsed:.1f}s, completed={completed}")
+
+                    yield _sse(
+                        {
+                            "type": "error",
+                            "status": "ERROR",
+                            "detail": (
+                                f"The assessment exceeded {int(GRAPH_TIMEOUT_S)}s "
+                                "and was stopped."
+                            ),
+                            "completed_nodes": list(completed),
+                            "duration_seconds": round(elapsed, 2),
+                        }
                     )
-                )
 
-                return
+                    yield _sse(
+                        _final_event(
+                            payload,
+                            final_state,
+                            completed,
+                            elapsed,
+                            status="ERROR",
+                            error="timeout",
+                        )
+                    )
 
-            if now - last_heartbeat >= HEARTBEAT_INTERVAL_S:
-                last_heartbeat = now
+                    return
 
                 yield _sse(
                     {
@@ -929,92 +948,125 @@ async def _stream_ask_events(
                     }
                 )
 
-            await asyncio.sleep(QUEUE_POLL_S)
-            continue
-
-        # ----------------------------------------------------
-        # A node (or several, when they ran in parallel) finished
-        # ----------------------------------------------------
-
-        if event_type == "graph_update":
-            if not isinstance(data, dict):
                 continue
 
-            for node_name, node_update in data.items():
-                node_name = str(node_name)
+            # ------------------------------------------------
+            # A node (or several, when they ran in parallel) finished
+            # ------------------------------------------------
 
-                if node_name not in completed:
-                    completed.append(node_name)
+            if event_type == "graph_update":
+                if not isinstance(data, dict):
+                    continue
 
-                if isinstance(node_update, dict):
-                    final_state.update(node_update)
+                for node_name, node_update in data.items():
+                    node_name = str(node_name)
 
-                yield _sse(
-                    _node_event(
+                    if node_name not in completed:
+                        completed.append(node_name)
+
+                    if isinstance(node_update, dict):
+                        final_state.update(node_update)
+
+                    event = _node_event(
                         node_name,
                         final_state,
                         completed,
                         time.monotonic() - started,
                     )
+
+                    _log(f"node_done {node_name} -> {event.get('node_status')}")
+
+                    yield _sse(event)
+
+                continue
+
+            # ------------------------------------------------
+            # Graph finished cleanly
+            # ------------------------------------------------
+
+            if event_type == "graph_finished":
+                duration = time.monotonic() - started
+                _log(f"finished in {duration:.1f}s, nodes={completed}")
+
+                yield _sse(
+                    _final_event(payload, final_state, completed, duration)
                 )
 
-            continue
+                return
 
-        # ----------------------------------------------------
-        # Graph finished cleanly
-        # ----------------------------------------------------
+            # ------------------------------------------------
+            # Graph raised
+            # ------------------------------------------------
 
-        if event_type == "graph_finished":
-            yield _sse(
-                _final_event(
-                    payload,
-                    final_state,
-                    completed,
-                    time.monotonic() - started,
+            if event_type == "graph_error":
+                duration = time.monotonic() - started
+                _log(f"graph error after {duration:.1f}s: {data!r}")
+
+                yield _sse(
+                    {
+                        "type": "error",
+                        "status": "ERROR",
+                        "detail": str(data) or repr(data),
+                        "completed_nodes": list(completed),
+                        "duration_seconds": round(duration, 2),
+                    }
                 )
-            )
 
-            return
-
-        # ----------------------------------------------------
-        # Graph raised
-        # ----------------------------------------------------
-
-        if event_type == "graph_error":
-            duration = time.monotonic() - started
-
-            yield _sse(
-                {
-                    "type": "error",
-                    "status": "ERROR",
-                    "detail": str(data),
-                    "completed_nodes": list(completed),
-                    "duration_seconds": round(duration, 2),
-                }
-            )
-
-            # The frontend treats `final` as the terminal event, so
-            # send one even on failure.
-            yield _sse(
-                _final_event(
-                    payload,
-                    final_state,
-                    completed,
-                    duration,
-                    status="ERROR",
-                    error=str(data),
+                # The frontend treats `final` as the terminal event, so
+                # send one even on failure.
+                yield _sse(
+                    _final_event(
+                        payload,
+                        final_state,
+                        completed,
+                        duration,
+                        status="ERROR",
+                        error=str(data) or repr(data),
+                    )
                 )
-            )
 
-            return
+                return
+
+    except asyncio.CancelledError:
+        # Client went away. Nothing to report to anyone.
+        _log("client disconnected mid-stream")
+        raise
+
+    except Exception as exc:
+        # Anything unexpected in this generator would otherwise close
+        # the connection with no terminal event, which the browser can
+        # only report as "the stream ended without a final result".
+        traceback.print_exc()
+        duration = time.monotonic() - started
+
+        yield _sse(
+            {
+                "type": "error",
+                "status": "ERROR",
+                "detail": f"stream failure: {exc}",
+                "completed_nodes": list(completed),
+                "duration_seconds": round(duration, 2),
+            }
+        )
+
+        yield _sse(
+            _final_event(
+                payload,
+                final_state,
+                completed,
+                duration,
+                status="ERROR",
+                error=f"stream failure: {exc}",
+            )
+        )
 
 
 @app.post("/api/ask/stream")
-async def ask_stream(payload: AskRequest, request: Request):
+async def ask_stream(payload: AskRequest):
     """Streaming ORCAWA assessment."""
 
     return StreamingResponse(
-        _stream_ask_events(payload, request),
+        _stream_ask_events(payload),
         media_type="text/event-stream",
         headers={
             # Never cache an SSE stream.
